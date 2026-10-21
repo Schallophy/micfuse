@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MicFuse</title>
+<style>
+  :root{
+    --bg:#faf9f5; --panel:#fff; --ink:#1f1e1d; --muted:#6b6862; --line:#e8e4db;
+    --accent:#d97757; --accent-ink:#fff; --ok:#3f7d58; --warn:#b7791f; --err:#b4453a;
+    --soft:#fbf9f4; --track:#f0ece3; --hover:#f6f3ec;
+    --warn-bg:#fdf6e9; --warn-line:#f0dfbc; --warn-ink:#7a5a15;
+    --err-bg:#fdf0ee; --err-line:#f1d3ce; --err-ink:#8a332a;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#1c1b19; --panel:#242320; --ink:#f3efe6; --muted:#a8a196; --line:#3a3733;
+      --accent:#e08366; --accent-ink:#1c1b19; --ok:#6aa57f; --warn:#d0a04a; --err:#d8796c;
+      --soft:#2a2926; --track:#3a3733; --hover:#2e2c29;
+      --warn-bg:#332b1c; --warn-line:#4d3f26; --warn-ink:#e5c07b;
+      --err-bg:#352020; --err-line:#543230; --err-ink:#e6a39a;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.55 system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;}
+  .wrap{max-width:1120px;margin:0 auto;padding:34px 24px 48px}
+  header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px}
+  h1{font-size:23px;margin:0 0 4px;letter-spacing:.2px;font-weight:650}
+  .sub{color:var(--muted);font-size:13.5px}
+  .status{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+  .pill{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:999px;
+        border:1px solid var(--line);background:var(--panel);font-size:13px;white-space:nowrap}
+  .dot{width:8px;height:8px;border-radius:50%;background:#a9a49a}
+  .pill.running .dot{background:var(--ok)} .pill.starting .dot{background:var(--warn)}
+  .pill.faulted .dot{background:var(--err)} .pill.disconnected .dot{background:var(--err)}
+  .grid{display:grid;grid-template-columns:minmax(430px,1.25fr) minmax(330px,1fr);gap:18px;align-items:start}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:18px}
+  .card h2{font-size:13px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);
+           margin:0 0 14px;font-weight:600;display:flex;align-items:center;gap:8px}
+  label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+  select,input[type=text]{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;
+       background:var(--panel);color:var(--ink);font:inherit;font-size:14px}
+  select:focus,input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(217,119,87,.18)}
+  .row{display:flex;gap:10px;align-items:center}
+  .row > *{flex:1}
+  .btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:9px 14px;border-radius:10px;
+       font:inherit;font-size:14px;cursor:pointer;transition:transform .08s ease,background .15s ease;white-space:nowrap}
+  .btn:hover{background:var(--hover)}
+  .btn:active{transform:scale(.985)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+  .btn.primary:hover{background:#c96545}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn.ghost{font-size:13px;padding:7px 11px}
+  .meter{position:relative;height:7px;border-radius:99px;background:var(--track);border:1px solid var(--line)}
+  .fill{position:relative;z-index:1;height:100%;width:0;background:#5aa76f;transition:width .02s linear;border-radius:99px}
+  .hold{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink);opacity:.55;left:0;z-index:2;transition:left .03s linear}
+  .fill.warn{background:#d0a04a} .fill.hot{background:#d8796c}
+  .hint{color:var(--muted);font-size:12.5px}
+  .tag{font-size:11px;padding:1px 7px;border-radius:99px;background:var(--soft);border:1px solid var(--line);color:var(--muted)}
+  .tag.dead{color:var(--err-ink);border-color:var(--err-line);background:var(--err-bg)}
+  .banner{border-radius:12px;padding:11px 14px;font-size:13.5px;margin-bottom:14px;border:1px solid}
+  .banner.warn{background:var(--warn-bg);border-color:var(--warn-line);color:var(--warn-ink)}
+  .banner.err{background:var(--err-bg);border-color:var(--err-line);color:var(--err-ink)}
+  .banner code{font:12.5px var(--mono);background:var(--panel);padding:2px 6px;border-radius:6px;border:1px solid var(--line)}
+
+  .applist{max-height:480px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:4px}
+  .applist::-webkit-scrollbar{width:10px}
+  .applist::-webkit-scrollbar-thumb{background:var(--track);border-radius:8px;border:3px solid var(--panel)}
+  .approw{display:grid;grid-template-columns:20px minmax(120px,1fr) 110px 40px 36px;gap:10px;align-items:center;
+          padding:8px 10px;border-radius:9px;color:var(--ink)}
+  .approw:hover{background:var(--hover)}
+  .approw + .approw{margin-top:2px}
+  .approw.off .atitle{color:var(--muted)}
+  .approw.off .fill{transition:width .45s linear;opacity:.55}
+  .picon{width:18px;height:18px;border-radius:4px;object-fit:contain;background:var(--track)}
+  .amain{min-width:0}
+  .atitle{font-size:13.5px;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .amain .meter{margin-top:4px;height:4px;width:130px}
+  .gslider{position:relative;width:100%;min-width:0}
+  .gslider .gtrack,.gslider .gfill{position:absolute;top:6px;height:4px;border-radius:99px;pointer-events:none}
+  .gslider .gtrack{left:0;right:0;background:var(--track)}
+  .gslider .gfill{left:0;width:0;background:var(--accent);opacity:.38}
+  input[type=range].again{position:relative;z-index:1;display:block;-webkit-appearance:none;appearance:none;background:transparent;height:16px;width:100%;margin:0;cursor:pointer}
+  input[type=range].again::-webkit-slider-runnable-track{height:4px;background:transparent;border-radius:99px}
+  input[type=range].again::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;margin-top:-5px;box-sizing:border-box;
+      border-radius:50%;background:var(--accent);border:2px solid var(--panel);box-shadow:0 1px 2px rgba(0,0,0,.25)}
+  input[type=range].again:disabled::-webkit-slider-thumb{background:var(--muted)}
+  input[type=range].again:disabled::-webkit-slider-runnable-track{opacity:.6}
+  .gv{font:12px var(--mono);color:var(--muted);text-align:right}
+  .switch{position:relative;display:inline-block;width:34px;height:20px;flex:0 0 auto}
+  .switch input{opacity:0;width:0;height:0}
+  .switch .knob{position:absolute;inset:0;background:var(--track);border:1px solid var(--line);
+                border-radius:99px;cursor:pointer;transition:background .15s ease,border-color .15s ease}
+  .switch .knob::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;
+                       background:var(--panel);box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s ease}
+  .switch input:checked + .knob{background:var(--accent);border-color:var(--accent)}
+  .switch input:checked + .knob::after{transform:translateX(14px);background:#fff}
+  .empty{padding:12px;color:var(--muted);font-size:13px}
+
+  @media (max-width:900px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>MicFuse</h1>
+    </div>
+    <div class="status">
+      <span class="pill" id="pill"><span class="dot"></span><span id="pillText">已停止</span></span>
+      <button class="btn primary" id="engineRestart">重启引擎</button>
+    </div>
+  </header>
+
+  <div id="banners"></div>
+
+  <div class="grid">
+    <section class="card">
+      <h2>应用 <span class="hint" id="srcCount"></span>
+        <button class="btn ghost" id="refreshProcs" style="margin-left:auto">刷新</button>
+      </h2>
+      <input id="procFilter" type="text" placeholder="搜索应用…" style="margin-bottom:10px">
+      <div id="appList" class="applist"></div>
+    </section>
+
+    <div>
+      <section class="card">
+        <h2>麦克风</h2>
+        <div class="row">
+          <select id="micDevice"></select>
+          <span class="gv" id="micGainVal">0.0 dB</span>
+        </div>
+        <div class="gslider" style="margin-top:9px">
+          <span class="gtrack"></span><span class="gfill"></span>
+          <input type="range" id="micGain" min="-60" max="12" step="0.5" value="0" class="again">
+        </div>
+        <div class="meter" style="margin-top:8px"><div class="fill" id="micBar"></div><span class="hold" id="micHold"></span></div>
+      </section>
+
+      <section class="card">
+        <h2>输出</h2>
+        <select id="outputDevice"></select>
+        <div class="hint" id="outputHint" style="margin-top:8px">应选择 <b>CABLE Input</b>；在语音软件里把麦克风选为 <b>CABLE Output</b>。</div>
+        <div class="meter" style="margin-top:12px"><div class="fill mix" id="mixBar"></div><span class="hold" id="mixHold"></span></div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const state = {
+  running:false, processes:[], sources:[], restarting:false, connected:true,
+  status:null, lastEventAt:0,
+  sig:'', rows:new Map(), gainTimers:{}, pending:new Set(), lastBanners:''};
+async function getJson(url){ const r = await fetch(url); return r.json(); }
+async function post(url, body){
+  const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{})});
+  try { return await r.json(); } catch { return {}; }
+}
+const pct = v => {
+  if (!v || v <= 0.000001) return 0;
+  return Math.max(0, Math.min(100, (20*Math.log10(v) + 60) / 60 * 100));
+};
+function paint(el, v, holdEl, holdV){
+  el.style.width = pct(v) + '%';
+  const db = v > 0.000001 ? 20*Math.log10(v) : -60;
+  el.classList.toggle('hot', db > -6);
+  el.classList.toggle('warn', db > -18 && db <= -6);
+  if (holdEl) holdEl.style.left = pct(holdV || 0) + '%';
+}
+const dbToGain = db => db <= -59.5 ? 0 : Math.pow(10, db / 20);
+const gainToDb = g => g <= 0 ? -60 : Math.max(-60, Math.min(12, 20 * Math.log10(g)));
+const fmtDb = db => db <= -59.5 ? '-∞' : (db > 0 ? '+' : '') + db.toFixed(1) + ' dB';
+function paintGainFill(input){
+  const fill = input.parentElement && input.parentElement.querySelector('.gfill');
+  if (!fill) return;
+  const width = input.clientWidth;
+  if (!width || input.disabled) { fill.style.width = '0'; return; }
+  const min = Number(input.min), max = Number(input.max), value = Number(input.value);
+  const usable = Math.max(0, width - 14);
+  const zero = 7 + usable * ((0 - min) / (max - min));
+  const current = 7 + usable * (Math.max(min, Math.min(max, value)) - min) / (max - min);
+  fill.style.left = Math.min(zero, current) + 'px';
+  fill.style.width = Math.abs(current - zero) + 'px';
+}
+
+const isGainRange = t => t instanceof Element && t.matches('input[type=range].again');
+function snapDb(input, value){
+  const min = Number(input.min), max = Number(input.max), step = Number(input.step) || 0.5;
+  return Number(Math.max(min, Math.min(max, Math.round(value / step) * step)).toFixed(1));
+}
+function setGainDb(input, db){
+  db = snapDb(input, db);
+  if (Number(input.value) === db) return;
+  input.value = String(db);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+// 滑轨上每档 0.5 dB 不足 1px，拖拽命不中刻度；滚轮每格精确走一档。
+document.addEventListener('wheel', e => {
+  const input = e.target;
+  if (!isGainRange(input) || input.disabled) return;
+  e.preventDefault();
+  const step = Number(input.step) || 0.5;
+  setGainDb(input, Number(input.value) + (e.deltaY < 0 ? step : -step));
+}, { passive: false });
+const escapeHtml = t => String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+async function loadDevices(){
+  const d = await getJson('/api/devices');
+  const mic = $('micDevice');
+  const prevMic = mic.value;
+  mic.innerHTML = '<option value="">不使用麦克风</option>' +
+    d.mics.map(m => `<option value="${m.id}">${escapeHtml(m.name)}${m.isDefault?'（默认）':''}</option>`).join('');
+  mic.value = prevMic || '';
+  const out = $('outputDevice');
+  const prevOut = out.value;
+  out.innerHTML = d.outputs.map(o => `<option value="${o.id}">${escapeHtml(o.name)}${o.isDefault?'（默认）':''}</option>`).join('');
+  const cable = d.outputs.find(o => /CABLE Input/i.test(o.name));
+  out.value = prevOut || (cable ? cable.id : (out.options[0] && out.options[0].value) || '');
+}
+
+async function loadProcesses(){
+  state.processes = await getJson('/api/processes');
+  renderApps();
+}
+
+function findSource(pid){ return state.sources.find(s => s.pid === pid); }
+
+function buildRows(){
+  const byPid = new Map();
+  for (const p of state.processes) {
+    byPid.set(p.pid, {
+      pid: p.pid,
+      label: (p.title && p.title.trim()) ? p.title : p.name,
+      peak: p.peak || 0,
+      source: null
+    });
+  }
+  for (const s of state.sources) {
+    const row = byPid.get(s.pid);
+    if (row) row.source = s;
+    else byPid.set(s.pid, { pid: s.pid, label: s.name, peak: 0, source: s });
+  }
+  const list = [...byPid.values()];
+  list.sort((a, b) => a.label.localeCompare(b.label, 'zh'));
+  return list;
+}
+
+function rowHtml(r, s){
+  const isOn = !!s;
+  return `<img class="picon" src="/api/icon?pid=${r.pid}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+    <div class="amain">
+      <div class="atitle" title="${escapeHtml(r.label)}">${escapeHtml(r.label)} <span class="tag dead" ${s && !s.alive ? '' : 'hidden'}>已停止</span></div>
+      <div class="meter"><div class="fill app"></div><span class="hold"></span></div>
+    </div>
+    <div class="gslider">
+      <span class="gtrack"></span><span class="gfill"></span>
+      <input class="again" type="range" min="-60" max="12" step="0.5" value="${isOn ? gainToDb(s.gain) : 0}" ${isOn?'':'disabled'}>
+    </div>
+    <span class="gv">${isOn ? fmtDb(gainToDb(s.gain)) : '—'}</span>
+    <label class="switch"><input type="checkbox" ${isOn?'checked':''}><span class="knob"></span></label>`;
+}
+
+function renderApps(){
+  const q = ($('procFilter').value || '').trim().toLowerCase();
+  const rows = buildRows().filter(r => !q || r.label.toLowerCase().includes(q));
+  const sig = rows.map(r => `${r.pid}:${r.label}:${r.source ? r.source.id + ':' + r.source.alive : 'off'}`).join('|');
+  const box = $('appList');
+  if (sig !== state.sig) {
+    state.sig = sig;
+    state.rows.clear();
+    box.innerHTML = '';
+    if (!rows.length) box.innerHTML = '<div class="empty">没有匹配的应用。打开应用或让它发声，再点刷新。</div>';
+    for (const r of rows) {
+      const el = document.createElement('div');
+      el.className = 'approw' + (r.source ? '' : ' off');
+      el.innerHTML = rowHtml(r, r.source);
+      bindRow(el, r);
+      box.appendChild(el);
+      state.rows.set(r.pid, el);
+    }
+  }
+  updateRows();
+  $('srcCount').textContent = state.sources.length ? `${state.sources.length} 个已开启` : '';
+}
+
+function bindRow(el, r){
+  const toggle = el.querySelector('.switch input');
+  const range = el.querySelector('.again');
+  toggle.addEventListener('change', async () => {
+    state.pending.add(r.pid);
+    try {
+      if (toggle.checked) {
+        if (!state.running) {
+          const started = await ensureEngine();
+          if (!started) { toggle.checked = false; return; }
+        }
+        const res = await post('/api/sources/add', { pid: r.pid });
+        if (res.error) { alert(res.error); toggle.checked = false; }
+      } else {
+        const s = findSource(r.pid);
+        if (s) await post('/api/sources/remove', { id: s.id });
+      }
+    } finally {
+      state.pending.delete(r.pid);
+    }
+    await refreshState();
+    await loadProcesses();
+  });
+  range.addEventListener('input', () => {
+    const s = findSource(r.pid);
+    el.querySelector('.gv').textContent = fmtDb(Number(range.value));
+    paintGainFill(range);
+    if (!s) return;
+    clearTimeout(state.gainTimers[s.id]);
+    state.gainTimers[s.id] = setTimeout(() => post('/api/sources/gain', { id: s.id, gain: dbToGain(Number(range.value)) }), 120);
+  });
+}
+
+function updateRows(){
+  const procs = new Map(state.processes.map(p => [p.pid, p]));
+  for (const [pid, el] of state.rows) {
+    if (state.pending.has(pid)) continue;
+    const s = findSource(pid);
+    const toggle = el.querySelector('.switch input');
+    const range = el.querySelector('.again');
+    const gv = el.querySelector('.gv');
+    const fill = el.querySelector('.fill.app');
+    const deadTag = el.querySelector('.tag.dead');
+    el.classList.toggle('off', !s);
+    toggle.checked = !!s;
+    range.disabled = !s;
+    if (s) {
+      if (document.activeElement !== range) {
+        const db = gainToDb(s.gain);
+        range.value = db;
+        gv.textContent = fmtDb(db);
+      }
+      paint(fill, s.level, el.querySelector('.hold'), s.hold);
+      deadTag.hidden = s.alive;
+      el.title = `缓冲 ${(s.bufferedMs || 0).toFixed(1)} ms · 调度欠帧 ${s.starvedFrames || 0} · 源无声 ${s.idleFrames || 0} 帧 · 丢帧 ${s.droppedFrames || 0} 帧 · 重采样 ${(s.ratioPpm || 0) >= 0 ? '+' : ''}${s.ratioPpm || 0} ppm`;
+    } else {
+      const proc = procs.get(pid);
+      paint(fill, proc ? (proc.peak || 0) : 0, el.querySelector('.hold'), 0);
+      gv.textContent = '—';
+      deadTag.hidden = true;
+      el.title = proc && (proc.peak || 0) > 0.0005 ? '未启用 · 波形为系统会话音量' : '';
+    }
+    paintGainFill(range);
+  }
+}
+
+async function ensureEngine(){
+  if (state.running) return true;
+  const out = $('outputDevice').value;
+  if (!out) { alert('没有可用的输出设备'); return false; }
+  const res = await post('/api/engine/start', { outputDeviceId: out });
+  await refreshState();
+  if (res.error) { alert(res.error); return false; }
+  return true;
+}
+
+function paintStatus(){
+  const pill = $('pill');
+  if (!state.connected){
+    pill.className = 'pill disconnected';
+    pill.title = '后端未连接（MicFuse 进程未运行或端口不通）';
+    $('pillText').textContent = '未连接';
+    $('engineRestart').style.display = 'none';
+    return;
+  }
+  const s = state.status || {};
+  pill.className = 'pill ' + (s.state || 'stopped');
+  const map = { stopped:'已停止', starting:'启动中', running:'已连接', faulted:'故障' };
+  $('pillText').textContent = map[s.state] || s.state || '已连接';
+  pill.title = s.error || '';
+  // Restart is a recovery action, not an apply button: only surface it when something is wrong.
+  $('engineRestart').style.display = (s.state === 'faulted' || state.restarting) ? '' : 'none';
+}
+
+function clearLevels(){
+  paint($('micBar'), 0, $('micHold'), 0);
+  paint($('mixBar'), 0, $('mixHold'), 0);
+  for (const el of state.rows.values())
+    paint(el.querySelector('.fill.app'), 0, el.querySelector('.hold'), 0);
+}
+
+function setConnected(ok){
+  if (state.connected === ok) return;
+  state.connected = ok;
+  if (!ok) clearLevels();
+  paintStatus();
+}
+
+function setState(s){
+  state.running = !!s.running;
+  state.sources = s.sources || [];
+  state.status = s;
+  $('engineRestart').disabled = state.restarting || s.state === 'starting';
+  paintStatus();
+
+  renderApps();
+  paint($('micBar'), s.micLevel, $('micHold'), s.micHold);
+  paint($('mixBar'), s.mixLevel, $('mixHold'), s.mixHold);
+
+  if (s.micId && document.activeElement !== $('micDevice')) $('micDevice').value = s.micId;
+  if (state.running && document.activeElement !== $('micGain')){
+    const db = gainToDb(s.micGain);
+    $('micGain').value = db;
+    $('micGainVal').textContent = fmtDb(db);
+    paintGainFill($('micGain'));
+  }
+  if (s.outputId) $('outputDevice').value = s.outputId;
+
+  const banners = [];
+  if (s.error) banners.push(`<div class="banner err">${escapeHtml(s.error)}</div>`);
+  if (state.running && s.outputName && !/CABLE/i.test(s.outputName))
+    banners.push(`<div class="banner warn">输出是 ${escapeHtml(s.outputName)}，混音会从扬声器外放。</div>`);
+  const bannerHtml = banners.join('');
+  if (state.lastBanners !== bannerHtml) { state.lastBanners = bannerHtml; $('banners').innerHTML = bannerHtml; }
+}
+
+// No log panel anymore: this poll is the backend heartbeat, and it tells a fresh instance that a
+// tab from the previous run is still open (WebUi._sawUiClient).
+async function ping(){
+  try { await getJson('/api/ping'); } catch (e) { setConnected(false); }
+}
+
+let events = null;
+function initEvents(){
+  try {
+    state.lastEventAt = Date.now();
+    events = new EventSource('/api/events');
+    events.onopen = () => setConnected(true);
+    events.onerror = () => { if (events) setConnected(false); };
+    events.onmessage = ev => {
+      state.lastEventAt = Date.now();
+      try { setState(JSON.parse(ev.data)); } catch (e) {}
+      setConnected(true);
+    };
+  } catch (e) { events = null; setConnected(false); }
+}
+
+// A frozen backend keeps the SSE socket open but stops pushing; 33 Hz means a 3 s hole is real.
+function checkLink(){
+  if (!events || !state.connected || !state.lastEventAt) return;
+  if (Date.now() - state.lastEventAt > 3000) setConnected(false);
+}
+
+// Nothing is shown while the tab is hidden, so nothing is worth computing: closing the EventSource
+// also stops the server's push loop, and clearing the timers stops every poll.
+let uiTimers = [];
+function startUiLoops(){
+  if (uiTimers.length) return;
+  if (!events) initEvents();
+  ping();
+  uiTimers.push(setInterval(ping, 1000));
+  // fallback polling only when the EventSource could not be created; the link check covers a
+  // socket that stays open but stops delivering.
+  uiTimers.push(setInterval(() => { if (!events) refreshState(); checkLink(); }, 1000));
+  uiTimers.push(setInterval(loadProcesses, 2000));
+  uiTimers.push(setInterval(loadDevices, 15000));
+}
+function stopUiLoops(){
+  uiTimers.forEach(clearInterval);
+  uiTimers = [];
+  if (events) { events.close(); events = null; }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { stopUiLoops(); return; }
+  startUiLoops();
+  refreshState();
+  loadProcesses();
+});
+
+async function refreshState(){
+  try {
+    const s = await getJson('/api/state');
+    setConnected(true);
+    setState(s);
+  } catch (e) { setConnected(false); }
+}
+
+$('engineRestart').onclick = async () => {
+  if (state.restarting) return;
+  const out = $('outputDevice').value;
+  if (!out) { alert('没有可用的输出设备'); return; }
+  const button = $('engineRestart');
+  state.restarting = true;
+  button.disabled = true;
+  button.textContent = '重启中…';
+  try {
+    const res = await post('/api/engine/restart', { outputDeviceId: out });
+    if (res.error) alert(res.error);
+  } finally {
+    state.restarting = false;
+    button.textContent = '重启引擎';
+    await refreshState();
+    await loadProcesses();
+  }
+};
+$('refreshProcs').onclick = () => loadProcesses();
+$('procFilter').addEventListener('input', renderApps);
+
+let micTimer = null;
+$('micGain').addEventListener('input', e => {
+  $('micGainVal').textContent = fmtDb(Number(e.target.value));
+  paintGainFill(e.target);
+  clearTimeout(micTimer);
+  micTimer = setTimeout(() => post('/api/mic', { deviceId: $('micDevice').value || '', gain: dbToGain(Number(e.target.value)) }), 150);
+});
+$('micDevice').addEventListener('change', () => {
+  post('/api/mic', { deviceId: $('micDevice').value || '', gain: dbToGain(Number($('micGain').value)) });
+});
+$('outputDevice').addEventListener('change', async () => {
+  if (!state.running) return;
+  const r = await post('/api/output', { deviceId: $('outputDevice').value });
+  if (r.error) alert(r.error);
+});
+
+(async function init(){
+  await loadDevices();
+  await loadProcesses();
+  await refreshState();
+  paintGainFill($('micGain'));
+  window.addEventListener('resize', () => document.querySelectorAll('input[type=range].again').forEach(paintGainFill));
+  startUiLoops();
+})();
+</script>
+</body>
+</html>
