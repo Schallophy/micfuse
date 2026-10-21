@@ -234,7 +234,6 @@ public sealed class WebUi
 
             if (method == "GET" && path == "/api/state") return Json200(_engine.Snapshot());
             if (method == "GET" && path == "/api/ping") return Json200(new { ok = true });
-            if (method == "GET" && path == "/api/processes") return Json200(ListAudioProcesses());
             if (method == "GET" && path == "/api/devices") return Json200(ListDevices());
 
             if (method == "GET" && path.StartsWith("/api/icon", StringComparison.Ordinal))
@@ -245,24 +244,54 @@ public sealed class WebUi
                 return ("200 OK", "image/png", IconCache.ForPid(pid));
             }
 
-            if (method == "POST" && path == "/api/engine/start")
+            if (method == "POST" && path == "/api/lines/add")
             {
-                var req = JsonSerializer.Deserialize<OutputRequest>(body, ReadJson);
-                if (req is null || string.IsNullOrWhiteSpace(req.OutputDeviceId)) return JsonError(400, "outputDeviceId required");
-                await _engine.Start(req.OutputDeviceId);
-                return Json200(new { ok = true, error = _engine.Snapshot().Error });
+                var req = JsonSerializer.Deserialize<DeviceRequest>(body, ReadJson);
+                if (req is null || string.IsNullOrWhiteSpace(req.DeviceId)) return JsonError(400, "deviceId required");
+                try
+                {
+                    int lineId = await _engine.AddLine(req.DeviceId);
+                    PersistTopology();
+                    return Json200(new { ok = true, lineId });
+                }
+                catch (Exception ex) { return JsonError(400, ex.Message); }
+            }
+
+            if (method == "POST" && path == "/api/lines/remove")
+            {
+                var req = JsonSerializer.Deserialize<LineRequest>(body, ReadJson);
+                if (req is null) return JsonError(400, "lineId required");
+                await _engine.RemoveLine(req.LineId);
+                PersistTopology();
+                return Json200(new { ok = true });
+            }
+
+            if (method == "POST" && path == "/api/lines/device")
+            {
+                var req = JsonSerializer.Deserialize<LineDeviceRequest>(body, ReadJson);
+                if (req is null || string.IsNullOrWhiteSpace(req.DeviceId)) return JsonError(400, "deviceId required");
+                try
+                {
+                    await _engine.SetLineDevice(req.LineId, req.DeviceId);
+                    PersistTopology();
+                    return Json200(new { ok = true });
+                }
+                catch (Exception ex) { return JsonError(400, ex.Message); }
+            }
+
+            if (method == "POST" && path == "/api/lines/restart")
+            {
+                var req = JsonSerializer.Deserialize<LineRequest>(body, ReadJson);
+                if (req is null) return JsonError(400, "lineId required");
+                try { await _engine.RestartLine(req.LineId); }
+                catch (Exception ex) { return JsonError(400, ex.Message); }
+                return Json200(new { ok = true });
             }
 
             if (method == "POST" && path == "/api/engine/restart")
             {
-                var req = JsonSerializer.Deserialize<OutputRequest>(body, ReadJson);
-                if (req is null || string.IsNullOrWhiteSpace(req.OutputDeviceId)) return JsonError(400, "outputDeviceId required");
-                try
-                {
-                    await _engine.Restart(req.OutputDeviceId);
-                    return Json200(new { ok = true, error = _engine.Snapshot().Error });
-                }
-                catch (Exception ex) { return JsonError(400, ex.Message); }
+                await _engine.RestartAllLines();
+                return Json200(new { ok = true, error = _engine.Snapshot().Error });
             }
 
             if (method == "POST" && path == "/api/sources/add")
@@ -271,7 +300,8 @@ public sealed class WebUi
                 if (req is null || req.Pid <= 0) return JsonError(400, "pid required");
                 try
                 {
-                    int id = await _engine.AddSource(req.Pid);
+                    int id = await _engine.AddAppSource(req.Pid, req.Title ?? "");
+                    PersistTopology();
                     return Json200(new { ok = true, id });
                 }
                 catch (Exception ex) { return JsonError(400, ex.Message); }
@@ -279,17 +309,52 @@ public sealed class WebUi
 
             if (method == "POST" && path == "/api/sources/remove")
             {
-                var req = JsonSerializer.Deserialize<IdRequest>(body, ReadJson);
-                if (req is null) return JsonError(400, "id required");
-                await _engine.RemoveSource(req.Id);
+                var req = JsonSerializer.Deserialize<SourceIdRequest>(body, ReadJson);
+                if (req is null || req.Id <= 0) return JsonError(400, "id required");
+                await _engine.RemoveAppSource(req.Id);
+                PersistTopology();
+                return Json200(new { ok = true });
+            }
+
+            if (method == "POST" && path == "/api/previews/start")
+            {
+                var rows = ListWindowCandidates();
+                await _engine.StartPreviews(rows.Select(r => (r.Pid, r.Name, r.Title)));
+                return Json200(new { rows });
+            }
+
+            if (method == "POST" && path == "/api/previews/stop")
+            {
+                await _engine.StopPreviews();
+                return Json200(new { ok = true });
+            }
+
+            if (method == "POST" && path == "/api/routes/app")
+            {
+                var req = JsonSerializer.Deserialize<AppRouteRequest>(body, ReadJson);
+                if (req is null || req.Id <= 0) return JsonError(400, "id required");
+                try { await _engine.SetAppRoute(req.Id, req.LineId, req.On); }
+                catch (Exception ex) { return JsonError(400, ex.Message); }
+                PersistTopology();
+                return Json200(new { ok = true });
+            }
+
+            if (method == "POST" && path == "/api/routes/mic")
+            {
+                var req = JsonSerializer.Deserialize<MicRouteRequest>(body, ReadJson);
+                if (req is null) return JsonError(400, "lineId required");
+                try { await _engine.SetMicRoute(req.LineId, req.On); }
+                catch (Exception ex) { return JsonError(400, ex.Message); }
+                PersistTopology();
                 return Json200(new { ok = true });
             }
 
             if (method == "POST" && path == "/api/sources/gain")
             {
                 var req = JsonSerializer.Deserialize<GainRequest>(body, ReadJson);
-                if (req is null) return JsonError(400, "bad body");
+                if (req is null || req.Id <= 0) return JsonError(400, "bad body");
                 _engine.SetSourceGain(req.Id, req.Gain);
+                PersistTopology();
                 return Json200(new { ok = true });
             }
 
@@ -306,24 +371,23 @@ public sealed class WebUi
                 catch (Exception ex) { return JsonError(400, ex.Message); }
             }
 
-            if (method == "POST" && path == "/api/output")
-            {
-                var req = JsonSerializer.Deserialize<OutputChangeRequest>(body, ReadJson);
-                if (req is null || string.IsNullOrWhiteSpace(req.DeviceId)) return JsonError(400, "deviceId required");
-                try
-                {
-                    await _engine.SetOutput(req.DeviceId);
-                    return Json200(new { ok = true });
-                }
-                catch (Exception ex) { return JsonError(400, ex.Message); }
-            }
-
             return JsonError(404, "not found");
         }
         catch (Exception ex)
         {
             return JsonError(500, ex.Message);
         }
+    }
+
+    /// <summary>Lines, the microphone's routes and the added sources are the topology worth keeping;
+    /// nothing here stores a process id, because it means nothing after a reboot.</summary>
+    private void PersistTopology()
+    {
+        var status = _engine.Snapshot();
+        _settings.SetLines(status.Lines.Select(l => (l.Id, l.DeviceId)));
+        _settings.SetMicRoutes(status.MicRoutes.Select(r => r.LineId));
+        _settings.SetSources(status.Sources.Select(s =>
+            (s.Name, s.Path, s.Title, s.Gain, s.Lines)));
     }
 
     private static (string, string, byte[]) Json200(object value)
@@ -342,12 +406,15 @@ public sealed class WebUi
         return ms.ToArray();
     }
 
-    private sealed class OutputRequest { public string OutputDeviceId { get; set; } = ""; }
-    private sealed class SourceAddRequest { public int Pid { get; set; } }
-    private sealed class IdRequest { public int Id { get; set; } }
+    private sealed class DeviceRequest { public string? DeviceId { get; set; } = ""; }
+    private sealed class LineRequest { public int LineId { get; set; } }
+    private sealed class LineDeviceRequest { public int LineId { get; set; } public string? DeviceId { get; set; } = ""; }
+    private sealed class AppRouteRequest { public int Id { get; set; } public int LineId { get; set; } public bool On { get; set; } }
+    private sealed class MicRouteRequest { public int LineId { get; set; } public bool On { get; set; } }
+    private sealed class SourceAddRequest { public int Pid { get; set; } public string? Title { get; set; } = ""; }
+    private sealed class SourceIdRequest { public int Id { get; set; } }
     private sealed class GainRequest { public int Id { get; set; } public float Gain { get; set; } = 1f; }
     private sealed class MicRequest { public string? DeviceId { get; set; } = ""; public float Gain { get; set; } = 1f; }
-    private sealed class OutputChangeRequest { public string? DeviceId { get; set; } = ""; }
 
     private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
@@ -389,93 +456,21 @@ public sealed class WebUi
         return true;
     }
 
-    private sealed class ProcEntry
+    private sealed class WindowRow
     {
         public int Pid;
         public string Name = "";
         public string Title = "";
-        public float Peak;
-        public bool HasSession;
-        public bool HasWindow;
     }
 
-    private static object ListAudioProcesses()
+    /// <summary>
+    /// Every window the user could pick, alt-tab filtered. This runs only when the add list is opened;
+    /// no audio metric is read here at all — the meters come from the engine's preview captures, which
+    /// are real process loopbacks.
+    /// </summary>
+    private static List<WindowRow> ListWindowCandidates()
     {
-        var map = new Dictionary<int, ProcEntry>();
-        ProcEntry Get(int pid)
-        {
-            if (!map.TryGetValue(pid, out var e))
-            {
-                string name;
-                try { name = Process.GetProcessById(pid).ProcessName; } catch { name = "(unknown)"; }
-                e = new ProcEntry { Pid = pid, Name = name };
-                map[pid] = e;
-            }
-            return e;
-        }
-
-        // Sessions are kept alive across a few sampling rounds: a single instantaneous peak is noise
-        // at a 2 s poll, but the maximum over ~75 ms reads as "this app is playing" without needing a
-        // background sampler.
-        var heldSessions = new List<AudioSessionControl>();
-        var heldManagers = new List<AudioSessionManager>();
-        var heldDevices = new List<MMDevice>();
-        var heldCollection = default(MMDeviceCollection);
-        try
-        {
-            using var enumerator = new MMDeviceEnumerator();
-            heldCollection = enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active);
-            for (int d = 0; d < heldCollection.Count; d++)
-            {
-                var device = heldCollection[d];
-                heldDevices.Add(device);
-                try
-                {
-                    var manager = device.AudioSessionManager;
-                    heldManagers.Add(manager);
-                    manager.RefreshSessions();
-                    var sessions = manager.Sessions;
-                    for (int i = 0; i < sessions.Count; i++)
-                    {
-                        var session = sessions[i];
-                        heldSessions.Add(session);
-                        try
-                        {
-                            int pid = unchecked((int)session.GetProcessID);
-                            if (pid <= 0) continue;
-                            Get(pid).HasSession = true;
-                        }
-                        catch (Exception) { }
-                    }
-                }
-                catch (Exception) { }
-            }
-
-            for (int round = 0; round < 4; round++)
-            {
-                foreach (var session in heldSessions)
-                {
-                    try
-                    {
-                        int pid = unchecked((int)session.GetProcessID);
-                        if (pid <= 0 || !map.TryGetValue(pid, out var e)) continue;
-                        float peak = session.AudioMeterInformation?.MasterPeakValue ?? 0f;
-                        if (peak > e.Peak) e.Peak = peak;
-                    }
-                    catch (Exception) { }
-                }
-                if (round < 3) Thread.Sleep(25);
-            }
-        }
-        finally
-        {
-            foreach (var s in heldSessions) { try { s.Dispose(); } catch { } }
-            foreach (var m in heldManagers) { try { m.Dispose(); } catch { } }
-            foreach (var d in heldDevices) { try { d.Dispose(); } catch { } }
-            try { heldCollection?.Dispose(); } catch { }
-        }
-
-        // Everything with a visible top-level window, so apps that are open but silent are selectable too.
+        var map = new Dictionary<int, WindowRow>();
         EnumWindows((hWnd, _) =>
         {
             try
@@ -484,27 +479,34 @@ public sealed class WebUi
                 if (!IsUserFacingWindow(hWnd)) return true;
                 GetWindowThreadProcessId(hWnd, out uint pid);
                 if (pid == 0) return true;
+                int id = (int)pid;
+                if (id == Environment.ProcessId || id == 4) return true;
                 int len = GetWindowTextLength(hWnd);
                 if (len <= 0) return true;
                 var sb = new StringBuilder(len + 1);
                 GetWindowText(hWnd, sb, sb.Capacity);
-                var e = Get((int)pid);
-                if (sb.Length > e.Title.Length) e.Title = sb.ToString();
-                e.HasWindow = true;
-                IconCache.SetWindow((int)pid, hWnd);
+                if (sb.Length == 0) return true;
+                if (!map.TryGetValue(id, out var row))
+                {
+                    string name;
+                    try
+                    {
+                        using var process = Process.GetProcessById(id);
+                        name = process.ProcessName;
+                    }
+                    catch { name = "(unknown)"; }
+                    row = new WindowRow { Pid = id, Name = name };
+                    map[id] = row;
+                }
+                if (sb.Length > row.Title.Length) row.Title = sb.ToString();
+                IconCache.SetWindow(id, hWnd);
             }
             catch (Exception) { }
             return true;
         }, IntPtr.Zero);
 
-        int self = Environment.ProcessId;
         return map.Values
-            .Where(e => e.Pid != self && e.Pid != 0 && e.Pid != 4)
-            .Where(e => e.HasWindow || e.Peak > 0.0005f)
-            .OrderByDescending(e => e.HasSession)
-            .ThenByDescending(e => e.Peak)
-            .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(e => new { pid = e.Pid, name = e.Name, title = e.Title, peak = e.Peak })
+            .OrderBy(r => string.IsNullOrWhiteSpace(r.Title) ? r.Name : r.Title, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
     }
 

@@ -11,6 +11,7 @@
     --soft:#fbf9f4; --track:#f0ece3; --hover:#f6f3ec;
     --warn-bg:#fdf6e9; --warn-line:#f0dfbc; --warn-ink:#7a5a15;
     --err-bg:#fdf0ee; --err-line:#f1d3ce; --err-ink:#8a332a;
+    --dotL:44%; --chip-ink:#fff;
     --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   }
   @media (prefers-color-scheme: dark){
@@ -20,31 +21,34 @@
       --soft:#2a2926; --track:#3a3733; --hover:#2e2c29;
       --warn-bg:#332b1c; --warn-line:#4d3f26; --warn-ink:#e5c07b;
       --err-bg:#352020; --err-line:#543230; --err-ink:#e6a39a;
+      --dotL:62%; --chip-ink:#1c1b19;
     }
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
+       -webkit-user-select:none;user-select:none;
        font:15px/1.55 system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;}
-  .wrap{max-width:1120px;margin:0 auto;padding:34px 24px 48px}
+  /* 只读界面：指针操作不应带走任何文字选区；输入框和报错文案仍要能选中复制。 */
+  input[type=text],textarea,.banner{-webkit-user-select:text;user-select:text}
+  .wrap{max-width:1180px;margin:0 auto;padding:34px 24px 48px}
   header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px}
   h1{font-size:23px;margin:0 0 4px;letter-spacing:.2px;font-weight:650}
-  .sub{color:var(--muted);font-size:13.5px}
   .status{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
   .pill{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:999px;
         border:1px solid var(--line);background:var(--panel);font-size:13px;white-space:nowrap}
-  .dot{width:8px;height:8px;border-radius:50%;background:#a9a49a}
-  .pill.running .dot{background:var(--ok)} .pill.starting .dot{background:var(--warn)}
-  .pill.faulted .dot{background:var(--err)} .pill.disconnected .dot{background:var(--err)}
-  .grid{display:grid;grid-template-columns:minmax(430px,1.25fr) minmax(330px,1fr);gap:18px;align-items:start}
+  .pilldot{width:8px;height:8px;border-radius:50%;background:#a9a49a}
+  .pill.running .pilldot{background:var(--ok)} .pill.starting .pilldot{background:var(--warn)}
+  .pill.faulted .pilldot{background:var(--err)} .pill.disconnected .pilldot{background:var(--err)}
+  .grid{display:grid;grid-template-columns:minmax(470px,1.35fr) minmax(360px,1fr);gap:18px;align-items:start}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:18px}
   .card h2{font-size:13px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);
            margin:0 0 14px;font-weight:600;display:flex;align-items:center;gap:8px}
-  label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
   select,input[type=text]{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;
        background:var(--panel);color:var(--ink);font:inherit;font-size:14px}
   select:focus,input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(217,119,87,.18)}
   .row{display:flex;gap:10px;align-items:center}
   .row > *{flex:1}
+  .row > .btn{flex:0 0 auto}
   .btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:9px 14px;border-radius:10px;
        font:inherit;font-size:14px;cursor:pointer;transition:transform .08s ease,background .15s ease;white-space:nowrap}
   .btn:hover{background:var(--hover)}
@@ -52,31 +56,31 @@
   .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
   .btn.primary:hover{background:#c96545}
   .btn:disabled{opacity:.45;cursor:not-allowed}
-  .btn.ghost{font-size:13px;padding:7px 11px}
+  .btn.ghost{font-size:12.5px;padding:5px 9px}
   .meter{position:relative;height:7px;border-radius:99px;background:var(--track);border:1px solid var(--line)}
   .fill{position:relative;z-index:1;height:100%;width:0;background:#5aa76f;transition:width .02s linear;border-radius:99px}
   .hold{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink);opacity:.55;left:0;z-index:2;transition:left .03s linear}
   .fill.warn{background:#d0a04a} .fill.hot{background:#d8796c}
   .hint{color:var(--muted);font-size:12.5px}
   .tag{font-size:11px;padding:1px 7px;border-radius:99px;background:var(--soft);border:1px solid var(--line);color:var(--muted)}
-  .tag.dead{color:var(--err-ink);border-color:var(--err-line);background:var(--err-bg)}
   .banner{border-radius:12px;padding:11px 14px;font-size:13.5px;margin-bottom:14px;border:1px solid}
   .banner.warn{background:var(--warn-bg);border-color:var(--warn-line);color:var(--warn-ink)}
   .banner.err{background:var(--err-bg);border-color:var(--err-line);color:var(--err-ink)}
-  .banner code{font:12.5px var(--mono);background:var(--panel);padding:2px 6px;border-radius:6px;border:1px solid var(--line)}
 
-  .applist{max-height:480px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:4px}
+  .applist{max-height:520px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:4px}
   .applist::-webkit-scrollbar{width:10px}
   .applist::-webkit-scrollbar-thumb{background:var(--track);border-radius:8px;border:3px solid var(--panel)}
-  .approw{display:grid;grid-template-columns:20px minmax(120px,1fr) 110px 40px 36px;gap:10px;align-items:center;
+  .approw{display:grid;grid-template-columns:20px minmax(140px,1fr) 92px 44px auto 20px;gap:10px;align-items:center;
           padding:8px 10px;border-radius:9px;color:var(--ink)}
   .approw:hover{background:var(--hover)}
   .approw + .approw{margin-top:2px}
   .approw.off .atitle{color:var(--muted)}
-  .approw.off .fill{transition:width .45s linear;opacity:.55}
   .picon{width:18px;height:18px;border-radius:4px;object-fit:contain;background:var(--track)}
   .amain{min-width:0}
-  .atitle{font-size:13.5px;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .atitle{font-size:13.5px;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:grab}
+  .atitle[data-src] .tag{margin-left:4px}
+  .atitle[draggable="false"]{cursor:default}
+  body.dragging .atitle{cursor:grabbing}
   .amain .meter{margin-top:4px;height:4px;width:130px}
   .gslider{position:relative;width:100%;min-width:0}
   .gslider .gtrack,.gslider .gfill{position:absolute;top:6px;height:4px;border-radius:99px;pointer-events:none}
@@ -89,15 +93,74 @@
   input[type=range].again:disabled::-webkit-slider-thumb{background:var(--muted)}
   input[type=range].again:disabled::-webkit-slider-runnable-track{opacity:.6}
   .gv{font:12px var(--mono);color:var(--muted);text-align:right}
-  .switch{position:relative;display:inline-block;width:34px;height:20px;flex:0 0 auto}
-  .switch input{opacity:0;width:0;height:0}
-  .switch .knob{position:absolute;inset:0;background:var(--track);border:1px solid var(--line);
-                border-radius:99px;cursor:pointer;transition:background .15s ease,border-color .15s ease}
-  .switch .knob::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;
-                       background:var(--panel);box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s ease}
-  .switch input:checked + .knob{background:var(--accent);border-color:var(--accent)}
-  .switch input:checked + .knob::after{transform:translateX(14px);background:#fff}
+
+  .routes{display:flex;gap:7px;align-items:center;justify-content:flex-end}
+  .rdot{width:15px;height:15px;padding:0;border-radius:50%;flex:0 0 auto;cursor:pointer;
+        border:2px solid hsl(var(--dh) 58% var(--dotL));background:transparent;
+        transition:background .12s ease,transform .08s ease}
+  .rdot.on{background:hsl(var(--dh) 58% var(--dotL))}
+  .rdot:hover{transform:scale(1.15)}
+  body.busy .rdot,body.busy .rpick,body.busy .cx,body.busy .srm{pointer-events:none;opacity:.5}
+  .rpick{border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:99px;
+         font:12px var(--mono);padding:2px 8px;cursor:pointer;white-space:nowrap}
+  .rpick:hover{border-color:var(--accent);color:var(--ink)}
+  .noroute{font:11px var(--mono);color:var(--muted)}
+
+  .card.line{padding:14px 16px;margin-bottom:14px}
+  .card.line.faulted{border-color:var(--err-line);background:var(--err-bg)}
+  .lhead{display:flex;align-items:center;gap:8px}
+  .lhead select{flex:1;font-size:13.5px;padding:7px 9px}
+  .lchip{flex:0 0 auto;width:19px;height:19px;border-radius:6px;background:hsl(var(--dh) 58% var(--dotL));
+         color:var(--chip-ink);font:11px/19px var(--mono);text-align:center;font-weight:700}
+  .mbtn{flex:0 0 auto;width:30px;height:30px;padding:0;border-radius:9px;cursor:pointer;display:inline-flex;
+        align-items:center;justify-content:center;border:1px solid var(--line);background:var(--panel);color:var(--muted);
+        transition:background .15s ease,border-color .15s ease,color .15s ease}
+  .mbtn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .mbtn:hover{background:var(--hover)}
+  .mbtn.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+  .mbtn.on:hover{background:var(--accent)}
+  .pool{min-height:46px;border:1.5px dashed var(--line);border-radius:10px;padding:7px;margin-top:10px;
+        display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start}
+  .pool.drop{border-color:var(--accent);border-style:solid;background:var(--hover)}
+  .pool .pempty{color:var(--muted);font-size:12.5px;padding:4px 6px}
+  .chip{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:3px 3px 3px 7px;border-radius:99px;
+        border:1px solid var(--line);background:var(--soft);font-size:12.5px}
+  .chip img{width:14px;height:14px;border-radius:3px;object-fit:contain;flex:0 0 auto}
+  .chip.wait{opacity:.62;border-style:dashed}
+  .wtage{font-size:11px;color:var(--muted);border-left:1px solid var(--line);padding-left:6px;flex:0 0 auto}
+  .cname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cx{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;
+      padding:0 5px;border-radius:50%;flex:0 0 auto}
+  .cx:hover{background:var(--err-bg);color:var(--err-ink)}
+  .srm{padding:0 2px;font-size:14px}
+  .lstat{font:11.5px var(--mono);color:var(--muted);margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lerr{margin:8px 0 0;font-size:12.5px}
+
   .empty{padding:12px;color:var(--muted);font-size:13px}
+  dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);
+         padding:18px 20px;max-width:420px;width:92vw}
+  dialog.wide{max-width:640px}
+  dialog::backdrop{background:rgba(0,0,0,.35)}
+  dialog h3{margin:0 0 12px;font-size:14px;font-weight:600}
+  .pitem{display:flex;align-items:center;gap:9px;padding:7px 4px;font-size:14px;cursor:pointer}
+  .pitem input{width:16px;height:16px;flex:0 0 auto;accent-color:var(--accent)}
+  dialog .btn{margin-top:0}
+  .dialogfoot{display:flex;align-items:center;justify-content:flex-end;gap:12px;margin-top:14px}
+
+  .picklist{max-height:min(52vh,430px);overflow:auto;margin-top:10px;border:1px solid var(--line);
+            border-radius:12px;background:var(--panel);padding:4px}
+  .picklist::-webkit-scrollbar{width:10px}
+  .picklist::-webkit-scrollbar-thumb{background:var(--track);border-radius:8px;border:3px solid var(--panel)}
+  .prow{display:grid;grid-template-columns:20px minmax(0,1fr) 110px 74px;gap:10px;align-items:center;
+        padding:7px 8px;border-radius:9px}
+  .prow:hover{background:var(--hover)}
+  .prow + .prow{margin-top:2px}
+  .pmain{min-width:0}
+  .ptitle{font-size:13.5px;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pname{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .prow .meter{width:110px}
+  .prow .pbtn{justify-self:end;min-width:60px;text-align:center}
+  .pickempty{padding:18px 10px;color:var(--muted);font-size:13px;text-align:center}
 
   @media (max-width:900px){.grid{grid-template-columns:1fr}}
 </style>
@@ -109,7 +172,7 @@
       <h1>MicFuse</h1>
     </div>
     <div class="status">
-      <span class="pill" id="pill"><span class="dot"></span><span id="pillText">已停止</span></span>
+      <span class="pill" id="pill"><span class="pilldot"></span><span id="pillText">已停止</span></span>
       <button class="btn primary" id="engineRestart">重启引擎</button>
     </div>
   </header>
@@ -119,15 +182,14 @@
   <div class="grid">
     <section class="card">
       <h2>应用 <span class="hint" id="srcCount"></span>
-        <button class="btn ghost" id="refreshProcs" style="margin-left:auto">刷新</button>
+        <button class="btn ghost" id="addSource" style="margin-left:auto">添加</button>
       </h2>
-      <input id="procFilter" type="text" placeholder="搜索应用…" style="margin-bottom:10px">
       <div id="appList" class="applist"></div>
     </section>
 
     <div>
       <section class="card">
-        <h2>麦克风</h2>
+        <h2>麦克风 <span class="hint" id="micName"></span></h2>
         <div class="row">
           <select id="micDevice"></select>
           <span class="gv" id="micGainVal">0.0 dB</span>
@@ -140,21 +202,41 @@
       </section>
 
       <section class="card">
-        <h2>输出</h2>
-        <select id="outputDevice"></select>
-        <div class="hint" id="outputHint" style="margin-top:8px">应选择 <b>CABLE Input</b>；在语音软件里把麦克风选为 <b>CABLE Output</b>。</div>
-        <div class="meter" style="margin-top:12px"><div class="fill mix" id="mixBar"></div><span class="hold" id="mixHold"></span></div>
+        <h2>线路 <span class="hint" id="lineCount"></span></h2>
+        <div class="row">
+          <select id="lineDevice"></select>
+          <button class="btn primary" id="addLine">添加</button>
+        </div>
       </section>
+
+      <div id="lineCards"></div>
     </div>
   </div>
 </div>
 
+<dialog id="sourcePicker" class="wide">
+  <h3>添加音频源</h3>
+  <input id="pickFilter" type="text" placeholder="搜索应用…">
+  <div id="pickList" class="picklist"><div class="pickempty">正在读取应用…</div></div>
+  <div class="dialogfoot">
+    <button class="btn" id="pickClose">关闭</button>
+  </div>
+</dialog>
+
+<dialog id="picker">
+  <h3 id="pickerTitle">选择线路</h3>
+  <div id="pickerList"></div>
+  <button class="btn primary" id="pickerClose">完成</button>
+</dialog>
+
 <script>
 const $ = id => document.getElementById(id);
+const HUES = [18, 172, 214, 42, 302, 96, 340, 262];
 const state = {
-  running:false, processes:[], sources:[], restarting:false, connected:true,
-  status:null, lastEventAt:0,
-  sig:'', rows:new Map(), gainTimers:{}, pending:new Set(), lastBanners:''};
+  running:false, sources:[], lines:[], outputs:[], status:null, previews:[],
+  picker:[], pickerSig:'', pickerTimer:null,
+  restarting:false, connected:true, lastEventAt:0, busy:false,
+  sig:'', lineSig:'', rows:new Map(), lineEls:new Map(), gainTimers:{}, lastBanners:''};
 async function getJson(url){ const r = await fetch(url); return r.json(); }
 async function post(url, body){
   const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{})});
@@ -165,6 +247,7 @@ const pct = v => {
   return Math.max(0, Math.min(100, (20*Math.log10(v) + 60) / 60 * 100));
 };
 function paint(el, v, holdEl, holdV){
+  if (!el) return;
   el.style.width = pct(v) + '%';
   const db = v > 0.000001 ? 20*Math.log10(v) : -60;
   el.classList.toggle('hot', db > -6);
@@ -208,161 +291,427 @@ document.addEventListener('wheel', e => {
 }, { passive: false });
 const escapeHtml = t => String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+// --- sources and routing ---------------------------------------------------------------------
+// The source list is what the user added, nothing else. An app is captured from the moment it is
+// added, so a source that is not routed yet still shows a live meter; its dots and the line pools only
+// say where it is sent. The microphone is not a pool member — each line owns a mic toggle.
+const findSource = id => state.sources.find(s => s.id === id);
+const sourceLabel = s => (s && (s.title || s.name)) || '';
+const sourceAlive = s => !!(s && s.alive && s.pid > 0);
+const lineIndex = id => state.lines.findIndex(l => l.id === id);
+const lineHue = id => { const i = lineIndex(id); return HUES[(i < 0 ? 0 : i) % HUES.length]; };
+const lineName = id => { const l = state.lines.find(x => x.id === id); return l ? l.name : '线路 ' + id; };
+const micRouteIds = () => new Set(((state.status && state.status.micRoutes) || []).map(r => r.lineId));
+
+function routesCellHtml(sourceId, onSet){
+  if (!state.lines.length) return '<span class="noroute">无线路</span>';
+  if (state.lines.length <= 4)
+    return state.lines.map(l =>
+      `<button class="rdot${onSet.has(l.id) ? ' on' : ''}" style="--dh:${lineHue(l.id)}" data-line="${l.id}"` +
+      ` data-src="${sourceId}" title="${escapeHtml(l.name)}" aria-label="${escapeHtml(l.name)}"></button>`).join('');
+  return `<button class="rpick" data-src="${sourceId}" title="选择线路">→ ${onSet.size}/${state.lines.length}</button>`;
+}
+
+async function toggleRoute(sourceId, lineId, on){
+  if (state.busy) return;
+  const mic = sourceId === 'mic';
+  const body = mic ? { lineId: Number(lineId), on } : { id: Number(sourceId), lineId: Number(lineId), on };
+  state.busy = true;
+  document.body.classList.add('busy');
+  try {
+    const res = await post(mic ? '/api/routes/mic' : '/api/routes/app', body);
+    if (res.error) alert(res.error);
+  } finally {
+    state.busy = false;
+    document.body.classList.remove('busy');
+  }
+  await refreshState();
+}
+
+async function removeSource(id){
+  const s = findSource(id);
+  if (!s || state.busy) return;
+  if (!confirm('移除“' + sourceLabel(s) + '”？')) return;
+  state.busy = true;
+  document.body.classList.add('busy');
+  try {
+    const res = await post('/api/sources/remove', { id });
+    if (res.error) alert(res.error);
+  } finally {
+    state.busy = false;
+    document.body.classList.remove('busy');
+  }
+  await refreshState();
+}
+
+function openLinePicker(sourceId){
+  const s = findSource(Number(sourceId));
+  const on = new Set((s && s.lines) || []);
+  $('pickerTitle').textContent = (s ? sourceLabel(s) : '音频源') + ' · 选择线路';
+  $('pickerList').innerHTML = state.lines.map(l =>
+    `<label class="pitem"><input type="checkbox" data-line="${l.id}" ${on.has(l.id) ? 'checked' : ''}>` +
+    `<span class="lchip" style="--dh:${lineHue(l.id)}">${lineIndex(l.id) + 1}</span>` +
+    `<span class="cname">${escapeHtml(l.name)}</span></label>`).join('');
+  $('picker').dataset.src = sourceId;
+  $('picker').showModal();
+}
+$('pickerClose').onclick = () => $('picker').close();
+$('pickerList').addEventListener('change', e => {
+  const cb = e.target.closest('input[data-line]');
+  if (cb) toggleRoute($('picker').dataset.src, cb.dataset.line, cb.checked);
+});
+
+// --- add-source list -------------------------------------------------------------------------
+// Opening it starts one throwaway process loopback per candidate app, so every meter is the real
+// captured signal; closing it tears them all down. The list is refreshed every 5 s while open, which
+// also renews the engine's preview lease.
+async function openSourcePicker(){
+  const dlg = $('sourcePicker');
+  $('pickFilter').value = '';
+  state.picker = [];
+  state.pickerSig = '';
+  $('pickList').innerHTML = '<div class="pickempty">正在读取应用…</div>';
+  dlg.showModal();
+  await refreshPicker();
+  clearInterval(state.pickerTimer);
+  state.pickerTimer = setInterval(refreshPicker, 5000);
+}
+
+async function refreshPicker(){
+  let res;
+  try { res = await post('/api/previews/start', {}); } catch (e) { return; }
+  if (res.error) { $('pickList').innerHTML = `<div class="pickempty">${escapeHtml(res.error)}</div>`; return; }
+  state.picker = res.rows || [];
+  renderPicker();
+}
+
+function pickerRowSig(r){
+  const added = state.sources.some(s => s.pid === r.pid && sourceAlive(s));
+  return `${r.pid}:${r.title}:${r.name}:${added ? 1 : 0}`;
+}
+
+function renderPicker(){
+  const q = ($('pickFilter').value || '').trim().toLowerCase();
+  const rows = state.picker.filter(r =>
+    !q || (r.title || '').toLowerCase().includes(q) || (r.name || '').toLowerCase().includes(q));
+  const sig = rows.map(pickerRowSig).join('|');
+  if (sig !== state.pickerSig){
+    state.pickerSig = sig;
+    const box = $('pickList');
+    if (!rows.length){
+      box.innerHTML = '<div class="pickempty">没有可添加的应用</div>';
+    } else {
+      box.innerHTML = rows.map(r => {
+        const added = state.sources.some(s => s.pid === r.pid && sourceAlive(s));
+        return `<div class="prow" data-pid="${r.pid}">
+          <img class="picon" src="/api/icon?pid=${r.pid}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+          <div class="pmain"><div class="ptitle">${escapeHtml(r.title || r.name)}</div>` +
+          `<div class="pname">${escapeHtml(r.name)}</div></div>
+          <div class="meter"><div class="fill pick"></div><span class="hold"></span></div>
+          <button class="btn ghost pbtn" data-pid="${r.pid}" ${added ? 'disabled' : ''}>${added ? '已添加' : '添加'}</button>
+        </div>`;
+      }).join('');
+    }
+  }
+  paintPicker();
+}
+
+function paintPicker(){
+  if (!$('sourcePicker').open) return;
+  for (const el of $('pickList').querySelectorAll('.prow')){
+    const pid = Number(el.dataset.pid);
+    const src = state.sources.find(s => s.pid === pid && sourceAlive(s));
+    const pv = state.previews.find(p => p.pid === pid);
+    const level = src ? src.level : (pv ? pv.level : 0);
+    const hold = src ? src.hold : (pv ? pv.hold : 0);
+    paint(el.querySelector('.fill.pick'), level, el.querySelector('.hold'), hold);
+    if (pv && pv.error) el.title = '无法捕获：' + pv.error;
+  }
+}
+
+$('addSource').onclick = openSourcePicker;
+
+async function stopPickerPreviews(){
+  clearInterval(state.pickerTimer);
+  state.pickerTimer = null;
+  state.picker = [];
+  state.pickerSig = '';
+  state.previews = [];
+  try { await post('/api/previews/stop', {}); } catch (e) {}
+}
+
+async function closeSourcePicker(){
+  const dlg = $('sourcePicker');
+  if (dlg.open) dlg.close();
+  await stopPickerPreviews();
+}
+
+$('pickClose').onclick = closeSourcePicker;
+// A dialog can also close itself (Escape); the explicit paths above cover the button and tab hiding.
+$('sourcePicker').addEventListener('cancel', () => { closeSourcePicker(); });
+$('sourcePicker').addEventListener('close', () => { stopPickerPreviews(); });
+$('pickFilter').addEventListener('input', () => { state.pickerSig = ''; renderPicker(); });
+$('pickList').addEventListener('click', async e => {
+  const btn = e.target.closest('.pbtn');
+  if (!btn || btn.disabled) return;
+  btn.disabled = true;
+  const row = state.picker.find(r => r.pid === Number(btn.dataset.pid));
+  const res = await post('/api/sources/add', { pid: Number(btn.dataset.pid), title: row ? (row.title || row.name) : '' });
+  if (res.error) { alert(res.error); btn.disabled = false; return; }
+  await refreshState();
+  state.pickerSig = '';
+  renderPicker();
+});
+
+// --- device lists ------------------------------------------------------------------------------
 async function loadDevices(){
-  const d = await getJson('/api/devices');
-  const mic = $('micDevice');
-  const prevMic = mic.value;
-  mic.innerHTML = '<option value="">不使用麦克风</option>' +
-    d.mics.map(m => `<option value="${m.id}">${escapeHtml(m.name)}${m.isDefault?'（默认）':''}</option>`).join('');
-  mic.value = prevMic || '';
-  const out = $('outputDevice');
-  const prevOut = out.value;
-  out.innerHTML = d.outputs.map(o => `<option value="${o.id}">${escapeHtml(o.name)}${o.isDefault?'（默认）':''}</option>`).join('');
-  const cable = d.outputs.find(o => /CABLE Input/i.test(o.name));
-  out.value = prevOut || (cable ? cable.id : (out.options[0] && out.options[0].value) || '');
+  state.outputs = (await getJson('/api/devices')).outputs || [];
+  renderDeviceLists();
 }
 
-async function loadProcesses(){
-  state.processes = await getJson('/api/processes');
-  renderApps();
+function renderDeviceLists(){
+  const add = $('lineDevice');
+  const prev = add.value;
+  add.innerHTML = '<option value="">选择输出设备…</option>' + state.outputs.map(o =>
+    `<option value="${o.id}">${escapeHtml(o.name)}${o.isDefault ? '（默认）' : ''}</option>`).join('');
+  add.value = prev && [...add.options].some(o => o.value === prev) ? prev : '';
+  renderLines();
 }
 
-function findSource(pid){ return state.sources.find(s => s.pid === pid); }
-
-function buildRows(){
-  const byPid = new Map();
-  for (const p of state.processes) {
-    byPid.set(p.pid, {
-      pid: p.pid,
-      label: (p.title && p.title.trim()) ? p.title : p.name,
-      peak: p.peak || 0,
-      source: null
-    });
-  }
-  for (const s of state.sources) {
-    const row = byPid.get(s.pid);
-    if (row) row.source = s;
-    else byPid.set(s.pid, { pid: s.pid, label: s.name, peak: 0, source: s });
-  }
-  const list = [...byPid.values()];
-  list.sort((a, b) => a.label.localeCompare(b.label, 'zh'));
-  return list;
-}
-
-function rowHtml(r, s){
-  const isOn = !!s;
-  return `<img class="picon" src="/api/icon?pid=${r.pid}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+// --- main source list --------------------------------------------------------------------------
+function rowHtml(s){
+  const alive = sourceAlive(s);
+  const label = sourceLabel(s);
+  return `<img class="picon" src="/api/icon?pid=${s.pid}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
     <div class="amain">
-      <div class="atitle" title="${escapeHtml(r.label)}">${escapeHtml(r.label)} <span class="tag dead" ${s && !s.alive ? '' : 'hidden'}>已停止</span></div>
+      <div class="atitle" draggable="${alive}" data-src="${s.id}" title="${escapeHtml(label)}">${escapeHtml(label)}<span class="tag" ${alive ? 'hidden' : ''}>待接入</span></div>
       <div class="meter"><div class="fill app"></div><span class="hold"></span></div>
     </div>
     <div class="gslider">
       <span class="gtrack"></span><span class="gfill"></span>
-      <input class="again" type="range" min="-60" max="12" step="0.5" value="${isOn ? gainToDb(s.gain) : 0}" ${isOn?'':'disabled'}>
+      <input class="again" type="range" min="-60" max="12" step="0.5" value="${gainToDb(s.gain)}">
     </div>
-    <span class="gv">${isOn ? fmtDb(gainToDb(s.gain)) : '—'}</span>
-    <label class="switch"><input type="checkbox" ${isOn?'checked':''}><span class="knob"></span></label>`;
+    <span class="gv">${fmtDb(gainToDb(s.gain))}</span>
+    <div class="routes">${routesCellHtml(s.id, new Set(s.lines || []))}</div>
+    <button class="cx srm" data-id="${s.id}" title="移除音频源">×</button>`;
 }
 
 function renderApps(){
-  const q = ($('procFilter').value || '').trim().toLowerCase();
-  const rows = buildRows().filter(r => !q || r.label.toLowerCase().includes(q));
-  const sig = rows.map(r => `${r.pid}:${r.label}:${r.source ? r.source.id + ':' + r.source.alive : 'off'}`).join('|');
+  const rows = [...state.sources].sort((a, b) => sourceLabel(a).localeCompare(sourceLabel(b), 'zh'));
+  const sig = rows.map(s => `${s.id}:${sourceLabel(s)}:${sourceAlive(s)}:${s.pid}:${(s.lines || []).join(',')}`).join('|')
+    + '#lines' + state.lines.map(l => l.id).join(',');
   const box = $('appList');
-  if (sig !== state.sig) {
+  if (sig !== state.sig){
+    const scrollTop = box.scrollTop;
     state.sig = sig;
     state.rows.clear();
     box.innerHTML = '';
-    if (!rows.length) box.innerHTML = '<div class="empty">没有匹配的应用。打开应用或让它发声，再点刷新。</div>';
-    for (const r of rows) {
+    if (!rows.length) box.innerHTML = '<div class="empty">尚未添加音频源</div>';
+    for (const s of rows){
       const el = document.createElement('div');
-      el.className = 'approw' + (r.source ? '' : ' off');
-      el.innerHTML = rowHtml(r, r.source);
-      bindRow(el, r);
+      el.className = 'approw' + (sourceAlive(s) ? '' : ' off');
+      el.innerHTML = rowHtml(s);
+      bindRow(el, s);
       box.appendChild(el);
-      state.rows.set(r.pid, el);
+      state.rows.set(s.id, el);
     }
+    box.scrollTop = scrollTop;
   }
   updateRows();
-  $('srcCount').textContent = state.sources.length ? `${state.sources.length} 个已开启` : '';
+  $('srcCount').textContent = state.sources.length ? `${state.sources.length} 个` : '';
 }
 
-function bindRow(el, r){
-  const toggle = el.querySelector('.switch input');
-  const range = el.querySelector('.again');
-  toggle.addEventListener('change', async () => {
-    state.pending.add(r.pid);
-    try {
-      if (toggle.checked) {
-        if (!state.running) {
-          const started = await ensureEngine();
-          if (!started) { toggle.checked = false; return; }
-        }
-        const res = await post('/api/sources/add', { pid: r.pid });
-        if (res.error) { alert(res.error); toggle.checked = false; }
-      } else {
-        const s = findSource(r.pid);
-        if (s) await post('/api/sources/remove', { id: s.id });
-      }
-    } finally {
-      state.pending.delete(r.pid);
-    }
-    await refreshState();
-    await loadProcesses();
-  });
-  range.addEventListener('input', () => {
-    const s = findSource(r.pid);
-    el.querySelector('.gv').textContent = fmtDb(Number(range.value));
-    paintGainFill(range);
-    if (!s) return;
+function bindRow(el, s){
+  el.querySelector('.again').addEventListener('input', () => {
+    el.querySelector('.gv').textContent = fmtDb(Number(el.querySelector('.again').value));
+    paintGainFill(el.querySelector('.again'));
     clearTimeout(state.gainTimers[s.id]);
-    state.gainTimers[s.id] = setTimeout(() => post('/api/sources/gain', { id: s.id, gain: dbToGain(Number(range.value)) }), 120);
+    state.gainTimers[s.id] = setTimeout(() =>
+      post('/api/sources/gain', { id: s.id, gain: dbToGain(Number(el.querySelector('.again').value)) }), 120);
   });
 }
 
 function updateRows(){
-  const procs = new Map(state.processes.map(p => [p.pid, p]));
-  for (const [pid, el] of state.rows) {
-    if (state.pending.has(pid)) continue;
-    const s = findSource(pid);
-    const toggle = el.querySelector('.switch input');
+  for (const [id, el] of state.rows){
+    const s = findSource(id);
+    if (!s) continue;
     const range = el.querySelector('.again');
     const gv = el.querySelector('.gv');
     const fill = el.querySelector('.fill.app');
-    const deadTag = el.querySelector('.tag.dead');
-    el.classList.toggle('off', !s);
-    toggle.checked = !!s;
-    range.disabled = !s;
-    if (s) {
-      if (document.activeElement !== range) {
-        const db = gainToDb(s.gain);
-        range.value = db;
-        gv.textContent = fmtDb(db);
-      }
-      paint(fill, s.level, el.querySelector('.hold'), s.hold);
-      deadTag.hidden = s.alive;
-      el.title = `缓冲 ${(s.bufferedMs || 0).toFixed(1)} ms · 调度欠帧 ${s.starvedFrames || 0} · 源无声 ${s.idleFrames || 0} 帧 · 丢帧 ${s.droppedFrames || 0} 帧 · 重采样 ${(s.ratioPpm || 0) >= 0 ? '+' : ''}${s.ratioPpm || 0} ppm`;
-    } else {
-      const proc = procs.get(pid);
-      paint(fill, proc ? (proc.peak || 0) : 0, el.querySelector('.hold'), 0);
-      gv.textContent = '—';
-      deadTag.hidden = true;
-      el.title = proc && (proc.peak || 0) > 0.0005 ? '未启用 · 波形为系统会话音量' : '';
+    const tag = el.querySelector('.tag');
+    const alive = sourceAlive(s);
+    el.classList.toggle('off', !alive);
+    tag.hidden = alive;
+    if (document.activeElement !== range){
+      const db = gainToDb(s.gain);
+      range.value = db;
+      gv.textContent = fmtDb(db);
     }
+    paint(fill, alive ? s.level : 0, el.querySelector('.hold'), alive ? s.hold : 0);
+    const routes = s.routes || [];
+    el.title = routes.length
+      ? routes.map(rt =>
+          `${lineName(rt.lineId)}：缓冲 ${(rt.bufferedMs || 0).toFixed(1)} ms · 欠帧 ${rt.starvedFrames || 0} · ` +
+          `源无声 ${rt.idleFrames || 0} 帧 · 丢帧 ${rt.droppedFrames || 0} 帧 · ` +
+          `重采样 ${(rt.ratioPpm || 0) >= 0 ? '+' : ''}${rt.ratioPpm || 0} ppm`).join('\n')
+      : '';
     paintGainFill(range);
   }
 }
 
-async function ensureEngine(){
-  if (state.running) return true;
-  const out = $('outputDevice').value;
-  if (!out) { alert('没有可用的输出设备'); return false; }
-  const res = await post('/api/engine/start', { outputDeviceId: out });
-  await refreshState();
-  if (res.error) { alert(res.error); return false; }
-  return true;
+// --- line pools --------------------------------------------------------------------------------
+function chipHtml(lineId, s){
+  return `<span class="chip"><img src="/api/icon?pid=${s.pid}" alt="" onerror="this.style.visibility='hidden'">` +
+    `<span class="cname">${escapeHtml(sourceLabel(s))}</span>` +
+    `<button class="cx" data-src="${s.id}" data-line="${lineId}" title="断开连接">×</button></span>`;
 }
 
+const MIC_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V7a3 3 0 0 1 3-3z"/><path d="M6 11a6 6 0 0 0 12 0"/><path d="M12 17v3"/></svg>';
+
+function waitingChipHtml(lineId, s){
+  return `<span class="chip wait"><span class="cname">${escapeHtml(sourceLabel(s))}</span><span class="wtage">待接入</span>` +
+    `<button class="cx" data-src="${s.id}" data-line="${lineId}" title="断开连接">×</button></span>`;
+}
+
+function lineCardHtml(l){
+  const ids = l.sourceIds || [];
+  const chips = ids.filter(id => id !== 0).map(id => {
+    const s = findSource(id);
+    return s ? chipHtml(l.id, s) : '';
+  }).filter(Boolean).join('');
+  const micOn = ids.includes(0);
+  const waiting = state.sources
+    .filter(s => !sourceAlive(s) && (s.lines || []).includes(l.id))
+    .map(s => waitingChipHtml(l.id, s)).join('');
+  return `<div class="lhead">
+      <span class="lchip" style="--dh:${lineHue(l.id)}">${lineIndex(l.id) + 1}</span>
+      <select class="ldev" data-line="${l.id}">${state.outputs.map(o =>
+        `<option value="${o.id}" ${o.id === l.deviceId ? 'selected' : ''}>${escapeHtml(o.name)}</option>`).join('')}</select>
+      <button class="mbtn${micOn ? ' on' : ''}" data-line="${l.id}" aria-pressed="${micOn}"
+        title="${micOn ? '已送入此线路，点击断开' : '送入此线路'}">${MIC_SVG}</button>
+      <button class="btn ghost lre" data-line="${l.id}" ${l.state === 'faulted' ? '' : 'hidden'}>重启</button>
+      <button class="btn ghost lx" data-line="${l.id}" title="移除线路">×</button>
+    </div>
+    <div class="meter" style="margin-top:10px"><div class="fill line"></div><span class="hold"></span></div>
+    <div class="pool" data-line="${l.id}">${chips + waiting || '<span class="pempty">未接入音频源</span>'}</div>
+    ${l.error ? `<div class="banner err lerr">${escapeHtml(l.error)}</div>` : ''}
+    <div class="lstat"></div>`;
+}
+
+function lineSigOf(){
+  const l = state.lines.map(x =>
+    `${x.id}:${x.deviceId}:${x.state}:${(x.sourceIds || []).join(',')}`).join('|');
+  const waiting = state.sources.filter(s => !sourceAlive(s))
+    .map(s => `${s.id}:${(s.lines || []).join(',')}`).join(',');
+  return l + '#' + state.outputs.map(o => o.id).join(',') + '#mic' + [...micRouteIds()].join(',') + '#w' + waiting;
+}
+
+function renderLines(){
+  const sig = lineSigOf();
+  const box = $('lineCards');
+  if (sig !== state.lineSig){
+    state.lineSig = sig;
+    state.lineEls.clear();
+    box.innerHTML = '';
+    for (const l of state.lines){
+      const el = document.createElement('section');
+      el.className = 'card line' + (l.state === 'faulted' ? ' faulted' : '');
+      el.dataset.line = l.id;
+      el.innerHTML = lineCardHtml(l);
+      box.appendChild(el);
+      state.lineEls.set(l.id, el);
+    }
+    $('lineCount').textContent = state.lines.length ? `${state.lines.length} 条` : '';
+  }
+  updateLines();
+}
+
+function lineStat(l){
+  const apps = (l.sourceIds || []).filter(id => id !== 0).length;
+  return `${apps} 个源 · 队列 ${l.queueMs.toFixed(1)} ms · ` +
+         `授权 ${(l.renderLatencyMs || 0).toFixed(1)} ms · 欠帧 ${l.starvedFrames || 0} · 削顶 ${l.clippedSamples || 0}` +
+         (l.mixBackstops ? ` · 兜底 ${l.mixBackstops}` : '');
+}
+
+function updateLines(){
+  for (const l of state.lines){
+    const el = state.lineEls.get(l.id);
+    if (!el) continue;
+    // A line with no player stops updating its meter, so a frozen bar would read as "still playing".
+    const live = l.state === 'running';
+    paint(el.querySelector('.fill.line'), live ? l.mixLevel : 0, el.querySelector('.hold'), live ? l.mixHold : 0);
+    el.querySelector('.lstat').textContent = lineStat(l);
+    const re = el.querySelector('.lre');
+    if (re) re.hidden = l.state !== 'faulted';
+  }
+}
+
+document.addEventListener('dragstart', e => {
+  const t = e.target.closest && e.target.closest('[draggable="true"][data-src]');
+  if (!t) return;
+  e.dataTransfer.effectAllowed = 'copy';
+  e.dataTransfer.setData('text/plain', t.dataset.src);
+  document.body.classList.add('dragging');
+});
+document.addEventListener('dragend', () => {
+  document.body.classList.remove('dragging');
+  document.querySelectorAll('.pool.drop').forEach(p => p.classList.remove('drop'));
+});
+document.addEventListener('dragover', e => {
+  const p = e.target.closest && e.target.closest('.pool');
+  if (!p) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'copy';
+  p.classList.add('drop');
+});
+document.addEventListener('dragleave', e => {
+  const p = e.target.closest && e.target.closest('.pool');
+  if (p && !p.contains(e.relatedTarget)) p.classList.remove('drop');
+});
+document.addEventListener('drop', async e => {
+  const p = e.target.closest && e.target.closest('.pool');
+  if (!p) return;
+  e.preventDefault();
+  p.classList.remove('drop');
+  const id = e.dataTransfer.getData('text/plain');
+  if (id) await toggleRoute(id, p.dataset.line, true);
+});
+
+document.addEventListener('click', e => {
+  const dot = e.target.closest('.rdot');
+  if (dot) { toggleRoute(dot.dataset.src, dot.dataset.line, !dot.classList.contains('on')); return; }
+  const pick = e.target.closest('.rpick');
+  if (pick) { openLinePicker(pick.dataset.src); return; }
+  const rm = e.target.closest('.srm');
+  if (rm) { removeSource(Number(rm.dataset.id)); return; }
+  const x = e.target.closest('.cx');
+  if (x) { toggleRoute(x.dataset.src, x.dataset.line, false); return; }
+});
+
+$('lineCards').addEventListener('change', async e => {
+  const sel = e.target.closest('.ldev');
+  if (!sel) return;
+  const r = await post('/api/lines/device', { lineId: Number(sel.dataset.line), deviceId: sel.value });
+  if (r.error) { alert(r.error); await refreshState(); }
+});
+$('lineCards').addEventListener('click', async e => {
+  const mb = e.target.closest('.mbtn');
+  if (mb) { await toggleRoute('mic', mb.dataset.line, !mb.classList.contains('on')); return; }
+  const re = e.target.closest('.lre');
+  if (re) { await post('/api/lines/restart', { lineId: Number(re.dataset.line) }); await refreshState(); return; }
+  const x = e.target.closest('.lx');
+  if (x) { await post('/api/lines/remove', { lineId: Number(x.dataset.line) }); await refreshState(); }
+});
+$('addLine').onclick = async () => {
+  const sel = $('lineDevice');
+  if (!sel.value) { alert('先选一台输出设备'); return; }
+  const r = await post('/api/lines/add', { deviceId: sel.value });
+  if (r.error) { alert(r.error); return; }
+  sel.value = '';
+  await refreshState();
+};
+
+// --- status, meters, link ---------------------------------------------------------------------
 function paintStatus(){
   const pill = $('pill');
   if (!state.connected){
@@ -383,9 +732,9 @@ function paintStatus(){
 
 function clearLevels(){
   paint($('micBar'), 0, $('micHold'), 0);
-  paint($('mixBar'), 0, $('mixHold'), 0);
-  for (const el of state.rows.values())
-    paint(el.querySelector('.fill.app'), 0, el.querySelector('.hold'), 0);
+  for (const el of state.lineEls.values()) paint(el.querySelector('.fill.line'), 0, el.querySelector('.hold'), 0);
+  for (const el of state.rows.values()) paint(el.querySelector('.fill.app'), 0, el.querySelector('.hold'), 0);
+  for (const el of $('pickList').querySelectorAll('.prow')) paint(el.querySelector('.fill.pick'), 0, el.querySelector('.hold'), 0);
 }
 
 function setConnected(ok){
@@ -398,27 +747,30 @@ function setConnected(ok){
 function setState(s){
   state.running = !!s.running;
   state.sources = s.sources || [];
+  state.lines = s.lines || [];
+  state.previews = s.previews || [];
   state.status = s;
-  $('engineRestart').disabled = state.restarting || s.state === 'starting';
+  $('engineRestart').disabled = state.restarting;
   paintStatus();
 
+  renderLines();
   renderApps();
+  paintPicker();
   paint($('micBar'), s.micLevel, $('micHold'), s.micHold);
-  paint($('mixBar'), s.mixLevel, $('mixHold'), s.mixHold);
+  $('micName').textContent = s.micName || '';
 
   if (s.micId && document.activeElement !== $('micDevice')) $('micDevice').value = s.micId;
-  if (state.running && document.activeElement !== $('micGain')){
+  if (document.activeElement !== $('micGain')){
     const db = gainToDb(s.micGain);
     $('micGain').value = db;
     $('micGainVal').textContent = fmtDb(db);
     paintGainFill($('micGain'));
   }
-  if (s.outputId) $('outputDevice').value = s.outputId;
 
   const banners = [];
+  if (!state.lines.length && state.connected)
+    banners.push('<div class="banner warn">尚未添加输出线路</div>');
   if (s.error) banners.push(`<div class="banner err">${escapeHtml(s.error)}</div>`);
-  if (state.running && s.outputName && !/CABLE/i.test(s.outputName))
-    banners.push(`<div class="banner warn">输出是 ${escapeHtml(s.outputName)}，混音会从扬声器外放。</div>`);
   const bannerHtml = banners.join('');
   if (state.lastBanners !== bannerHtml) { state.lastBanners = bannerHtml; $('banners').innerHTML = bannerHtml; }
 }
@@ -458,10 +810,7 @@ function startUiLoops(){
   if (!events) initEvents();
   ping();
   uiTimers.push(setInterval(ping, 1000));
-  // fallback polling only when the EventSource could not be created; the link check covers a
-  // socket that stays open but stops delivering.
   uiTimers.push(setInterval(() => { if (!events) refreshState(); checkLink(); }, 1000));
-  uiTimers.push(setInterval(loadProcesses, 2000));
   uiTimers.push(setInterval(loadDevices, 15000));
 }
 function stopUiLoops(){
@@ -470,10 +819,14 @@ function stopUiLoops(){
   if (events) { events.close(); events = null; }
 }
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { stopUiLoops(); return; }
+  if (document.hidden) {
+    // A hidden tab cannot see the add list, and leaving it open would keep a capture per app alive.
+    if ($('sourcePicker').open) closeSourcePicker();
+    stopUiLoops();
+    return;
+  }
   startUiLoops();
   refreshState();
-  loadProcesses();
 });
 
 async function refreshState(){
@@ -486,24 +839,19 @@ async function refreshState(){
 
 $('engineRestart').onclick = async () => {
   if (state.restarting) return;
-  const out = $('outputDevice').value;
-  if (!out) { alert('没有可用的输出设备'); return; }
   const button = $('engineRestart');
   state.restarting = true;
   button.disabled = true;
   button.textContent = '重启中…';
   try {
-    const res = await post('/api/engine/restart', { outputDeviceId: out });
+    const res = await post('/api/engine/restart', {});
     if (res.error) alert(res.error);
   } finally {
     state.restarting = false;
     button.textContent = '重启引擎';
     await refreshState();
-    await loadProcesses();
   }
 };
-$('refreshProcs').onclick = () => loadProcesses();
-$('procFilter').addEventListener('input', renderApps);
 
 let micTimer = null;
 $('micGain').addEventListener('input', e => {
@@ -515,18 +863,23 @@ $('micGain').addEventListener('input', e => {
 $('micDevice').addEventListener('change', () => {
   post('/api/mic', { deviceId: $('micDevice').value || '', gain: dbToGain(Number($('micGain').value)) });
 });
-$('outputDevice').addEventListener('change', async () => {
-  if (!state.running) return;
-  const r = await post('/api/output', { deviceId: $('outputDevice').value });
-  if (r.error) alert(r.error);
-});
 
 (async function init(){
-  await loadDevices();
-  await loadProcesses();
+  const mic = $('micDevice');
+  mic.innerHTML = '<option value="">不使用麦克风</option>';
+  try {
+    const d = await getJson('/api/devices');
+    mic.innerHTML = '<option value="">不使用麦克风</option>' + (d.mics || []).map(m =>
+      `<option value="${m.id}">${escapeHtml(m.name)}${m.isDefault ? '（默认）' : ''}</option>`).join('');
+    state.outputs = d.outputs || [];
+  } catch (e) {}
+  renderDeviceLists();
   await refreshState();
   paintGainFill($('micGain'));
-  window.addEventListener('resize', () => document.querySelectorAll('input[type=range].again').forEach(paintGainFill));
+  window.addEventListener('resize', () => {
+    document.querySelectorAll('input[type=range].again').forEach(paintGainFill);
+    state.lineSig = ''; state.sig = ''; renderLines(); renderApps();
+  });
   startUiLoops();
 })();
 </script>

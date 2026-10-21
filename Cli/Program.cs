@@ -100,22 +100,60 @@ internal static partial class Program
     private static async Task<int> RunWeb(Options o)
     {
         await using var engine = new AudioEngine();
-        try
-        {
-            bool started = await engine.StartPreferredAsync();
-            Log.Line(started ? "engine auto-started" : "engine auto-start skipped: no render endpoint");
-        }
-        catch (Exception ex)
-        {
-            Log.Line("engine auto-start failed: " + Describe(ex));
-        }
-
         var settings = Settings.Load();
-        if (!string.IsNullOrWhiteSpace(settings.MicId) && engine.Snapshot().Running)
+
+        // Restored from choices the user made, never invented: a first run adds no line and starts nothing.
+        foreach (var line in settings.Lines)
         {
             try
             {
-                await engine.SetMic(settings.MicId, settings.MicGain);
+                await engine.AddLine(line.DeviceId, line.Id);
+                Log.Line($"line {line.Id} restored from settings");
+            }
+            catch (Exception ex)
+            {
+                Log.Line($"line {line.Id} restore skipped: " + Describe(ex));
+            }
+        }
+
+        // Sources the user added come back by identity, not by pid: whatever is already running is
+        // attached now, whatever is not stays in the list waiting until it appears.
+        foreach (var source in settings.Sources)
+        {
+            try
+            {
+                await engine.RestoreSource(
+                    new RouteIdentity { Name = source.Name, Path = source.Path },
+                    source.Title, source.Gain, source.Lines);
+                Log.Line($"source '{source.Name}' restored from settings, lines=[{string.Join(',', source.Lines)}]");
+            }
+            catch (Exception ex)
+            {
+                Log.Line($"source '{source.Name}' restore skipped: " + Describe(ex));
+            }
+        }
+
+        try { await engine.ReconnectSources(); }
+        catch (Exception ex) { Log.Line("source reconnect failed: " + Describe(ex)); }
+
+        foreach (int lineId in settings.MicRoutes)
+        {
+            try
+            {
+                await engine.SetMicRoute(lineId, true);
+                Log.Line($"mic route restored -> line {lineId}");
+            }
+            catch (Exception ex)
+            {
+                Log.Line($"mic route {lineId} restore skipped: " + Describe(ex));
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.MicId))
+        {
+            try
+            {
+                await engine.RestoreMic(settings.MicId, settings.MicGain);
                 Log.Line($"mic restored from settings, gain={settings.MicGain:F2}");
             }
             catch (Exception ex)

@@ -77,9 +77,12 @@ internal static class Probe
 
         Log.Line($"probe target: {device.FriendlyName} id={device.ID}");
 
-        var mixer = new Mixer(Rate, Channels, PacketFrames, Rate / 2, addInitialSource: false,
+        var mixer = new Mixer(Rate, Channels, PacketFrames, Rate / 2, "probe",
                               levelControl: !o.ProbeOpenLoop);
-        int appId = mixer.AddAppSource();
+        var appRing = new SourceRing(Rate / 2, Channels, Rate);
+        var micRing = new SourceRing(Rate / 2, Channels, Rate);
+        int appId = mixer.AttachSource(appRing);
+        int micId = mixer.AttachSource(micRing);
         var provider = new MixerProvider(mixer, WaveFormat.CreateIeeeFloatWaveFormat(Rate, Channels), null, Rate);
         var player = new WasapiPlayerBuilder()
             .WithDevice(device)
@@ -192,8 +195,8 @@ internal static class Probe
                         if (mic) injects.Add((t, MicAmp));
                     }
                 }
-                mixer.WriteApp(appId, appBlock);
-                mixer.WriteMic(micBlock);
+                appRing.Write(appBlock);
+                micRing.Write(micBlock);
                 toneFrame += PacketFrames;
                 p++;
                 next += packetTicks;
@@ -218,8 +221,8 @@ internal static class Probe
         // The controller's own rate estimate is the ground truth for drift calibration: unlike the
         // latency slope it does not pass through the arrival-based capture axis, which carries its own
         // ppm-level bias when the driver withholds QPC.
-        var appStats = mixer.SourceStats(appId);
-        var micStats = mixer.MicStats();
+        var appStats = mixer.Stats(appId);
+        var micStats = mixer.Stats(micId);
         Log.Line($"ratio: app={appStats.RatioPpm:+0;-0;0}ppm mic={micStats.RatioPpm:+0;-0;0}ppm " +
                  $"buffered app={appStats.BufferedMs:F1}ms mic={micStats.BufferedMs:F1}ms " +
                  $"starved app={appStats.StarvedFrames} mic={micStats.StarvedFrames} " +

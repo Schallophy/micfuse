@@ -79,12 +79,14 @@ internal static partial class Program
             }
 
             int framesPerBlock = MixSampleRate * MixBlockMs / 1000;
-            var mixer = new Mixer(MixSampleRate, MixChannels, framesPerBlock, MixSampleRate / 2)
+            var appRing = new SourceRing(MixSampleRate / 2, MixChannels, MixSampleRate);
+            var micRing = new SourceRing(MixSampleRate / 2, MixChannels, MixSampleRate);
+            var mixer = new Mixer(MixSampleRate, MixChannels, framesPerBlock, MixSampleRate / 2, "mix")
             {
-                AppGain = (float)o.AppGain,
-                MicGain = (float)o.MicGain,
                 TestToneHz = o.TestToneHz,
             };
+            mixer.AttachSource(appRing, gain: (float)o.AppGain);
+            if (micRecorder is not null) mixer.AttachSource(micRing, gain: (float)o.MicGain);
 
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(o.OutPath))!);
             if (!o.NoWav)
@@ -100,7 +102,7 @@ internal static partial class Program
             appRecorder.DataAvailable += (buffer, _, _, _) =>
             {
                 var floats = MemoryMarshal.Cast<byte, float>(buffer);
-                mixer.WriteApp(floats);
+                appRing.Write(floats);
             };
             appRecorder.RecordingStopped += (_, e) =>
             {
@@ -114,7 +116,7 @@ internal static partial class Program
                 micRecorder.DataAvailable += (buffer, _, _, _) =>
                 {
                     var floats = MemoryMarshal.Cast<byte, float>(buffer);
-                    mixer.WriteMic(floats);
+                    micRing.Write(floats);
                 };
                 micRecorder.RecordingStopped += (_, e) =>
                 {

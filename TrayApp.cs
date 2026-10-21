@@ -67,7 +67,7 @@ internal sealed class SystemTray : IDisposable
         _restartItem.Text = "重启中…";
         try
         {
-            await _engine.RestartCurrentAsync();
+            await _engine.RestartAllLines();
         }
         catch (Exception ex)
         {
