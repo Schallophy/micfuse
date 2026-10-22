@@ -38,6 +38,19 @@ public sealed class WebUi
     private readonly Settings _settings;
     private TcpListener? _listener;
     private volatile bool _sawUiClient;
+    /// <summary>Identifies the UI this process serves. A tab compares it against the one it loaded and
+    /// reloads itself when a rebuilt binary starts, so a running page never keeps stale JS.</summary>
+    private static readonly string UiBuild = ComputeUiBuild();
+
+    private static string ComputeUiBuild()
+    {
+        try
+        {
+            var hash = System.Security.Cryptography.SHA256.HashData(LoadUi());
+            return Convert.ToHexString(hash)[..12].ToLowerInvariant();
+        }
+        catch (Exception) { return ""; }
+    }
 
     public WebUi(AudioEngine engine, WebOptions options, Settings settings)
     {
@@ -233,7 +246,7 @@ public sealed class WebUi
                 return ("200 OK", "text/html; charset=utf-8", LoadUi());
 
             if (method == "GET" && path == "/api/state") return Json200(_engine.Snapshot());
-            if (method == "GET" && path == "/api/ping") return Json200(new { ok = true });
+            if (method == "GET" && path == "/api/ping") return Json200(new { ok = true, build = UiBuild });
             if (method == "GET" && path == "/api/devices") return Json200(ListDevices());
 
             if (method == "GET" && path.StartsWith("/api/icon", StringComparison.Ordinal))
@@ -286,6 +299,19 @@ public sealed class WebUi
                 try { await _engine.RestartLine(req.LineId); }
                 catch (Exception ex) { return JsonError(400, ex.Message); }
                 return Json200(new { ok = true });
+            }
+
+            if (method == "POST" && path == "/api/lines/label")
+            {
+                var req = JsonSerializer.Deserialize<LineLabelRequest>(body, ReadJson);
+                if (req is null) return JsonError(400, "lineId required");
+                try
+                {
+                    _engine.SetLineLabel(req.LineId, req.Label ?? "");
+                    PersistTopology();
+                    return Json200(new { ok = true });
+                }
+                catch (Exception ex) { return JsonError(400, ex.Message); }
             }
 
             if (method == "POST" && path == "/api/engine/restart")
@@ -384,7 +410,7 @@ public sealed class WebUi
     private void PersistTopology()
     {
         var status = _engine.Snapshot();
-        _settings.SetLines(status.Lines.Select(l => (l.Id, l.DeviceId)));
+        _settings.SetLines(status.Lines.Select(l => (l.Id, l.DeviceId, l.Label)));
         _settings.SetMicRoutes(status.MicRoutes.Select(r => r.LineId));
         _settings.SetSources(status.Sources.Select(s =>
             (s.Name, s.Path, s.Title, s.Gain, s.Lines)));
@@ -409,6 +435,7 @@ public sealed class WebUi
     private sealed class DeviceRequest { public string? DeviceId { get; set; } = ""; }
     private sealed class LineRequest { public int LineId { get; set; } }
     private sealed class LineDeviceRequest { public int LineId { get; set; } public string? DeviceId { get; set; } = ""; }
+    private sealed class LineLabelRequest { public int LineId { get; set; } public string? Label { get; set; } = ""; }
     private sealed class AppRouteRequest { public int Id { get; set; } public int LineId { get; set; } public bool On { get; set; } }
     private sealed class MicRouteRequest { public int LineId { get; set; } public bool On { get; set; } }
     private sealed class SourceAddRequest { public int Pid { get; set; } public string? Title { get; set; } = ""; }

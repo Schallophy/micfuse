@@ -109,7 +109,13 @@
   .card.line{padding:14px 16px;margin-bottom:14px}
   .card.line.faulted{border-color:var(--err-line);background:var(--err-bg)}
   .lhead{display:flex;align-items:center;gap:8px}
-  .lhead select{flex:1;font-size:13.5px;padding:7px 9px}
+  input.lname{flex:1;min-width:0;width:auto;padding:5px 8px;border-color:transparent;background:transparent;
+              font-size:13.5px;color:var(--ink);border-radius:8px}
+  input.lname::placeholder{color:var(--muted)}
+  input.lname:hover{background:var(--hover)}
+  input.lname:focus{background:var(--panel);border-color:var(--accent)}
+  .ldevrow{margin-top:8px}
+  .ldevrow select{width:100%;font-size:13.5px;padding:7px 9px}
   .lchip{flex:0 0 auto;width:19px;height:19px;border-radius:6px;background:hsl(var(--dh) 58% var(--dotL));
          color:var(--chip-ink);font:11px/19px var(--mono);text-align:center;font-weight:700}
   .mbtn{flex:0 0 auto;width:30px;height:30px;padding:0;border-radius:9px;cursor:pointer;display:inline-flex;
@@ -236,7 +242,7 @@ const state = {
   running:false, sources:[], lines:[], outputs:[], status:null, previews:[],
   picker:[], pickerSig:'', pickerTimer:null,
   restarting:false, connected:true, lastEventAt:0, busy:false,
-  sig:'', lineSig:'', rows:new Map(), lineEls:new Map(), gainTimers:{}, lastBanners:''};
+  sig:'', lineSig:'', rows:new Map(), lineEls:new Map(), gainTimers:{}, labelTimers:{}, lastBanners:''};
 async function getJson(url){ const r = await fetch(url); return r.json(); }
 async function post(url, body){
   const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{})});
@@ -300,7 +306,8 @@ const sourceLabel = s => (s && (s.title || s.name)) || '';
 const sourceAlive = s => !!(s && s.alive && s.pid > 0);
 const lineIndex = id => state.lines.findIndex(l => l.id === id);
 const lineHue = id => { const i = lineIndex(id); return HUES[(i < 0 ? 0 : i) % HUES.length]; };
-const lineName = id => { const l = state.lines.find(x => x.id === id); return l ? l.name : '线路 ' + id; };
+const lineLabel = l => (l && l.label && l.label.trim()) ? l.label.trim() : (l ? l.name : '');
+const lineName = id => { const l = state.lines.find(x => x.id === id); return l ? lineLabel(l) : '线路 ' + id; };
 const micRouteIds = () => new Set(((state.status && state.status.micRoutes) || []).map(r => r.lineId));
 
 function routesCellHtml(sourceId, onSet){
@@ -308,7 +315,7 @@ function routesCellHtml(sourceId, onSet){
   if (state.lines.length <= 4)
     return state.lines.map(l =>
       `<button class="rdot${onSet.has(l.id) ? ' on' : ''}" style="--dh:${lineHue(l.id)}" data-line="${l.id}"` +
-      ` data-src="${sourceId}" title="${escapeHtml(l.name)}" aria-label="${escapeHtml(l.name)}"></button>`).join('');
+      ` data-src="${sourceId}" title="${escapeHtml(lineLabel(l))}" aria-label="${escapeHtml(lineLabel(l))}"></button>`).join('');
   return `<button class="rpick" data-src="${sourceId}" title="选择线路">→ ${onSet.size}/${state.lines.length}</button>`;
 }
 
@@ -350,7 +357,7 @@ function openLinePicker(sourceId){
   $('pickerList').innerHTML = state.lines.map(l =>
     `<label class="pitem"><input type="checkbox" data-line="${l.id}" ${on.has(l.id) ? 'checked' : ''}>` +
     `<span class="lchip" style="--dh:${lineHue(l.id)}">${lineIndex(l.id) + 1}</span>` +
-    `<span class="cname">${escapeHtml(l.name)}</span></label>`).join('');
+    `<span class="cname">${escapeHtml(lineLabel(l))}</span></label>`).join('');
   $('picker').dataset.src = sourceId;
   $('picker').showModal();
 }
@@ -584,13 +591,15 @@ function lineCardHtml(l){
     .map(s => waitingChipHtml(l.id, s)).join('');
   return `<div class="lhead">
       <span class="lchip" style="--dh:${lineHue(l.id)}">${lineIndex(l.id) + 1}</span>
-      <select class="ldev" data-line="${l.id}">${state.outputs.map(o =>
-        `<option value="${o.id}" ${o.id === l.deviceId ? 'selected' : ''}>${escapeHtml(o.name)}</option>`).join('')}</select>
+      <input class="lname" type="text" maxlength="40" value="${escapeHtml(l.label || '')}"
+        placeholder="备注（可选）" aria-label="线路备注">
       <button class="mbtn${micOn ? ' on' : ''}" data-line="${l.id}" aria-pressed="${micOn}"
         title="${micOn ? '已送入此线路，点击断开' : '送入此线路'}">${MIC_SVG}</button>
       <button class="btn ghost lre" data-line="${l.id}" ${l.state === 'faulted' ? '' : 'hidden'}>重启</button>
       <button class="btn ghost lx" data-line="${l.id}" title="移除线路">×</button>
     </div>
+    <div class="ldevrow"><select class="ldev" data-line="${l.id}">${state.outputs.map(o =>
+        `<option value="${o.id}" ${o.id === l.deviceId ? 'selected' : ''}>${escapeHtml(o.name)}</option>`).join('')}</select></div>
     <div class="meter" style="margin-top:10px"><div class="fill line"></div><span class="hold"></span></div>
     <div class="pool" data-line="${l.id}">${chips + waiting || '<span class="pempty">未接入音频源</span>'}</div>
     ${l.error ? `<div class="banner err lerr">${escapeHtml(l.error)}</div>` : ''}
@@ -638,6 +647,8 @@ function updateLines(){
     if (!el) continue;
     // A line with no player stops updating its meter, so a frozen bar would read as "still playing".
     const live = l.state === 'running';
+    const name = el.querySelector('.lname');
+    if (name && document.activeElement !== name) name.value = l.label || '';
     paint(el.querySelector('.fill.line'), live ? l.mixLevel : 0, el.querySelector('.hold'), live ? l.mixHold : 0);
     el.querySelector('.lstat').textContent = lineStat(l);
     const re = el.querySelector('.lre');
@@ -687,6 +698,18 @@ document.addEventListener('click', e => {
   if (x) { toggleRoute(x.dataset.src, x.dataset.line, false); return; }
 });
 
+$('lineCards').addEventListener('input', e => {
+  const inp = e.target.closest('.lname');
+  if (!inp) return;
+  const lineId = Number(inp.closest('.card.line').dataset.line);
+  clearTimeout(state.labelTimers[lineId]);
+  state.labelTimers[lineId] = setTimeout(() =>
+    post('/api/lines/label', { lineId, label: inp.value }), 400);
+});
+$('lineCards').addEventListener('keydown', e => {
+  const inp = e.target.closest('.lname');
+  if (inp && e.key === 'Enter') inp.blur();
+});
 $('lineCards').addEventListener('change', async e => {
   const sel = e.target.closest('.ldev');
   if (!sel) return;
@@ -775,9 +798,16 @@ function setState(s){
 }
 
 // No log panel anymore: this poll is the backend heartbeat, and it tells a fresh instance that a
-// tab from the previous run is still open (WebUi._sawUiClient).
+// tab from the previous run is still open (WebUi._sawUiClient). It also carries the build id of the
+// UI the backend is serving: after a rebuild and restart the tab reloads itself instead of silently
+// running stale JavaScript against a newer engine.
+let pageBuild = '';
 async function ping(){
-  try { await getJson('/api/ping'); } catch (e) { setConnected(false); }
+  try {
+    const r = await getJson('/api/ping');
+    if (!pageBuild) pageBuild = r.build || '';
+    else if (r.build && r.build !== pageBuild) { location.reload(); return; }
+  } catch (e) { setConnected(false); }
 }
 
 let events = null;

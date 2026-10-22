@@ -62,6 +62,8 @@ public sealed class LineInfo
     public int Id;
     public string DeviceId = "";
     public string Name = "";
+    /// <summary>User's own remark for this line; empty means "just the device name".</summary>
+    public string Label = "";
     public string State = "stopped";
     public string Error = "";
     public float MixLevel;
@@ -159,6 +161,7 @@ public sealed class AudioEngine : IAsyncDisposable
         public int Id;
         public string DeviceId = "";
         public string Name = "";
+        public string Label = "";
         public MMDevice? Device;
         public MMDeviceCollection? Devices;
         public Mixer? Bus;
@@ -249,6 +252,7 @@ public sealed class AudioEngine : IAsyncDisposable
                 Id = line.Id,
                 DeviceId = line.DeviceId,
                 Name = line.Name,
+                Label = line.Label,
                 State = line.State,
                 Error = line.Error,
                 QueueMs = QueueDepthMs(line),
@@ -611,6 +615,19 @@ public sealed class AudioEngine : IAsyncDisposable
         {
             _ops.Release();
         }
+    }
+
+    /// <summary>A remark only: it never touches the device, the bus or the routes.</summary>
+    public void SetLineLabel(int lineId, string label)
+    {
+        Line? line;
+        lock (_gate) line = _lines.FirstOrDefault(l => l.Id == lineId);
+        if (line is null) throw new InvalidOperationException("线路不存在: " + lineId);
+        string next = (label ?? "").Trim();
+        if (next.Length > 40) next = next[..40];
+        if (line.Label == next) return;
+        line.Label = next;
+        Log($"line {lineId} label -> '{next}'");
     }
 
     /// <summary>Adds an app as a source. It is captured from now on whether or not a line carries it,

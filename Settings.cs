@@ -6,6 +6,8 @@ public sealed class LineSetting
 {
     public int Id { get; set; }
     public string DeviceId { get; set; } = "";
+    /// <summary>Optional remark the user typed for this line.</summary>
+    public string Label { get; set; } = "";
 }
 
 /// <summary>A remembered route from the old schema, kept only so an existing settings file migrates.</summary>
@@ -104,11 +106,13 @@ public sealed class Settings
         Save();
     }
 
-    public void SetLines(IEnumerable<(int Id, string DeviceId)> lines)
+    public void SetLines(IEnumerable<(int Id, string DeviceId, string Label)> lines)
     {
-        var next = lines.Select(l => new LineSetting { Id = l.Id, DeviceId = l.DeviceId }).ToList();
+        var next = lines.Select(l => new LineSetting { Id = l.Id, DeviceId = l.DeviceId, Label = l.Label ?? "" }).ToList();
         if (next.Count == Lines.Count &&
-            next.Zip(Lines).All(pair => pair.First.Id == pair.Second.Id && pair.First.DeviceId == pair.Second.DeviceId))
+            next.Zip(Lines).All(pair => pair.First.Id == pair.Second.Id &&
+                                        pair.First.DeviceId == pair.Second.DeviceId &&
+                                        string.Equals(pair.First.Label, pair.Second.Label, StringComparison.Ordinal)))
             return;
         Lines = next;
         // A route to a line that no longer exists can never be re-established.

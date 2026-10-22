@@ -108,6 +108,7 @@ internal static partial class Program
             try
             {
                 await engine.AddLine(line.DeviceId, line.Id);
+                engine.SetLineLabel(line.Id, line.Label);
                 Log.Line($"line {line.Id} restored from settings");
             }
             catch (Exception ex)
