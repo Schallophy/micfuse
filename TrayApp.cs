@@ -19,11 +19,9 @@ internal sealed class SystemTray : IDisposable
     private readonly ToolStripMenuItem _exitItem;
     private readonly NotifyIcon _icon;
     private readonly System.Windows.Forms.Timer _timer;
-    private readonly Icon _idleIcon;
-    private readonly Icon _activeIcon;
-    private readonly IntPtr _idleHandle;
-    private readonly IntPtr _activeHandle;
-    private bool _showActive;
+    private readonly Icon _appIcon;
+    private readonly IntPtr _iconHandle;
+    private bool _active;
     private bool _restarting;
 
     public ApplicationContext Context => _context;
@@ -34,8 +32,7 @@ internal sealed class SystemTray : IDisposable
         _web = web;
         _server = server;
         _cancel = cancel;
-        _idleIcon = CreateIcon(false, out _idleHandle);
-        _activeIcon = CreateIcon(true, out _activeHandle);
+        _appIcon = CreateIcon(out _iconHandle);
 
         _openItem = new ToolStripMenuItem("打开 MicFuse", null, (_, _) => _web.OpenPage());
         _restartItem = new ToolStripMenuItem("重启引擎", null, async (_, _) => await RestartAsync());
@@ -48,7 +45,7 @@ internal sealed class SystemTray : IDisposable
         _icon = new NotifyIcon
         {
             Text = BuildTooltip(false, web.Url ?? ""),
-            Icon = _idleIcon,
+            Icon = _appIcon,
             Visible = true,
             ContextMenuStrip = _menu,
         };
@@ -93,10 +90,9 @@ internal sealed class SystemTray : IDisposable
             active = false;
         }
 
-        if (active != _showActive)
+        if (active != _active)
         {
-            _showActive = active;
-            _icon.Icon = active ? _activeIcon : _idleIcon;
+            _active = active;
             _icon.Text = BuildTooltip(active, _web.Url ?? "");
         }
 
@@ -110,7 +106,7 @@ internal sealed class SystemTray : IDisposable
     private static string BuildTooltip(bool active, string url) =>
         active ? $"MicFuse — 混音运行中\n{url}" : $"MicFuse — 已停止\n{url}";
 
-    private static Icon CreateIcon(bool active, out IntPtr handle)
+    private static Icon CreateIcon(out IntPtr handle)
     {
         using var bitmap = new Bitmap(32, 32, PixelFormat.Format32bppArgb);
         using (var g = Graphics.FromImage(bitmap))
@@ -118,8 +114,8 @@ internal sealed class SystemTray : IDisposable
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.Clear(Color.Transparent);
 
-            Color background = active ? Color.FromArgb(217, 119, 87) : Color.FromArgb(31, 30, 29);
-            Color foreground = active ? Color.White : Color.FromArgb(250, 249, 245);
+            Color background = Color.FromArgb(217, 119, 87);
+            Color foreground = Color.White;
 
             using var backgroundBrush = new SolidBrush(background);
             using var foregroundBrush = new SolidBrush(foreground);
@@ -147,11 +143,9 @@ internal sealed class SystemTray : IDisposable
         _openItem.Dispose();
         _restartItem.Dispose();
         _exitItem.Dispose();
-        _idleIcon.Dispose();
-        _activeIcon.Dispose();
+        _appIcon.Dispose();
         _context.Dispose();
-        if (_idleHandle != IntPtr.Zero) DestroyIcon(_idleHandle);
-        if (_activeHandle != IntPtr.Zero) DestroyIcon(_activeHandle);
+        if (_iconHandle != IntPtr.Zero) DestroyIcon(_iconHandle);
     }
 
     [DllImport("user32.dll", SetLastError = true)]
