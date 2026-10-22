@@ -67,7 +67,7 @@
   .banner.warn{background:var(--warn-bg);border-color:var(--warn-line);color:var(--warn-ink)}
   .banner.err{background:var(--err-bg);border-color:var(--err-line);color:var(--err-ink)}
 
-  .applist{max-height:520px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:4px}
+  .applist{max-height:min(520px, max(220px, calc(100vh - 470px)));overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:4px}
   .applist::-webkit-scrollbar{width:10px}
   .applist::-webkit-scrollbar-thumb{background:var(--track);border-radius:8px;border:3px solid var(--panel)}
   .approw{display:grid;grid-template-columns:20px minmax(140px,1fr) 92px 44px auto 20px;gap:10px;align-items:center;
@@ -107,7 +107,10 @@
   .noroute{font:11px var(--mono);color:var(--muted)}
 
   .card.line{padding:14px 16px;margin-bottom:14px}
-  .card.line.faulted{border-color:var(--err-line);background:var(--err-bg)}
+  /* Outputs are the part that can keep growing; scroll them instead of pushing the page off-screen. */
+  #lineCards{max-height:calc(100vh - 280px);overflow:auto;overscroll-behavior:contain;padding-right:2px}
+  #lineCards::-webkit-scrollbar{width:10px}
+  #lineCards::-webkit-scrollbar-thumb{background:var(--track);border-radius:8px;border:3px solid var(--bg)}  .card.line.faulted{border-color:var(--err-line);background:var(--err-bg)}
   .lhead{display:flex;align-items:center;gap:8px}
   input.lname{flex:1;min-width:0;width:auto;padding:5px 8px;border-color:transparent;background:transparent;
               font-size:13.5px;color:var(--ink);border-radius:8px}
@@ -168,7 +171,7 @@
   .prow .pbtn{justify-self:end;min-width:60px;text-align:center}
   .pickempty{padding:18px 10px;color:var(--muted);font-size:13px;text-align:center}
 
-  @media (max-width:900px){.grid{grid-template-columns:1fr}}
+  @media (max-width:900px){.grid{grid-template-columns:1fr}#lineCards{max-height:none;overflow:visible}.applist{max-height:520px}}
 </style>
 </head>
 <body>
@@ -186,16 +189,9 @@
   <div id="banners"></div>
 
   <div class="grid">
-    <section class="card">
-      <h2>应用 <span class="hint" id="srcCount"></span>
-        <button class="btn ghost" id="addSource" style="margin-left:auto">添加</button>
-      </h2>
-      <div id="appList" class="applist"></div>
-    </section>
-
     <div>
       <section class="card">
-        <h2>麦克风 <span class="hint" id="micName"></span></h2>
+        <h2>麦克风</h2>
         <div class="row">
           <select id="micDevice"></select>
           <span class="gv" id="micGainVal">0.0 dB</span>
@@ -207,6 +203,15 @@
         <div class="meter" style="margin-top:8px"><div class="fill" id="micBar"></div><span class="hold" id="micHold"></span></div>
       </section>
 
+      <section class="card">
+        <h2>应用 <span class="hint" id="srcCount"></span>
+          <button class="btn ghost" id="addSource" style="margin-left:auto">添加</button>
+        </h2>
+        <div id="appList" class="applist"></div>
+      </section>
+    </div>
+
+    <div>
       <section class="card">
         <h2>线路 <span class="hint" id="lineCount"></span></h2>
         <div class="row">
@@ -242,7 +247,7 @@ const state = {
   running:false, sources:[], lines:[], outputs:[], status:null, previews:[],
   picker:[], pickerSig:'', pickerTimer:null,
   restarting:false, connected:true, lastEventAt:0, busy:false,
-  sig:'', lineSig:'', rows:new Map(), lineEls:new Map(), gainTimers:{}, labelTimers:{}, lastBanners:''};
+  sig:'', lineSig:'', rows:new Map(), lineEls:new Map(), gainTimers:{}, labelTimers:{}, labelDrafts:{}, lastBanners:''};
 async function getJson(url){ const r = await fetch(url); return r.json(); }
 async function post(url, body){
   const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{})});
@@ -505,7 +510,8 @@ function rowHtml(s){
 function renderApps(){
   const rows = [...state.sources].sort((a, b) => sourceLabel(a).localeCompare(sourceLabel(b), 'zh'));
   const sig = rows.map(s => `${s.id}:${sourceLabel(s)}:${sourceAlive(s)}:${s.pid}:${(s.lines || []).join(',')}`).join('|')
-    + '#lines' + state.lines.map(l => l.id).join(',');
+    // Label is part of the signature because each dot's tooltip is baked in at render time.
+    + '#lines' + state.lines.map(l => l.id + ':' + (l.label || '')).join(',');
   const box = $('appList');
   if (sig !== state.sig){
     const scrollTop = box.scrollTop;
@@ -591,7 +597,7 @@ function lineCardHtml(l){
     .map(s => waitingChipHtml(l.id, s)).join('');
   return `<div class="lhead">
       <span class="lchip" style="--dh:${lineHue(l.id)}">${lineIndex(l.id) + 1}</span>
-      <input class="lname" type="text" maxlength="40" value="${escapeHtml(l.label || '')}"
+      <input class="lname" type="text" maxlength="40" value="${escapeHtml(state.labelDrafts[l.id] !== undefined ? state.labelDrafts[l.id] : (l.label || ''))}"
         placeholder="备注（可选）" aria-label="线路备注">
       <button class="mbtn${micOn ? ' on' : ''}" data-line="${l.id}" aria-pressed="${micOn}"
         title="${micOn ? '已送入此线路，点击断开' : '送入此线路'}">${MIC_SVG}</button>
@@ -648,7 +654,10 @@ function updateLines(){
     // A line with no player stops updating its meter, so a frozen bar would read as "still playing".
     const live = l.state === 'running';
     const name = el.querySelector('.lname');
-    if (name && document.activeElement !== name) name.value = l.label || '';
+    const draft = state.labelDrafts[l.id];
+    if (draft !== undefined && (l.label || '') === draft) delete state.labelDrafts[l.id];
+    if (name && document.activeElement !== name && state.labelDrafts[l.id] === undefined)
+      name.value = l.label || '';
     paint(el.querySelector('.fill.line'), live ? l.mixLevel : 0, el.querySelector('.hold'), live ? l.mixHold : 0);
     el.querySelector('.lstat').textContent = lineStat(l);
     const re = el.querySelector('.lre');
@@ -702,14 +711,35 @@ $('lineCards').addEventListener('input', e => {
   const inp = e.target.closest('.lname');
   if (!inp) return;
   const lineId = Number(inp.closest('.card.line').dataset.line);
+  // Keep the typed value visible while the round-trip is in flight; the SSE snapshot still carries
+  // the old label for a frame or two.
+  state.labelDrafts[lineId] = inp.value.trim();
   clearTimeout(state.labelTimers[lineId]);
-  state.labelTimers[lineId] = setTimeout(() =>
-    post('/api/lines/label', { lineId, label: inp.value }), 400);
+  state.labelTimers[lineId] = setTimeout(() => flushLabel(lineId, inp.value), 400);
+});
+// Clicking away must commit: the next SSE frame would otherwise repaint the old label into the box.
+$('lineCards').addEventListener('focusout', e => {
+  const inp = e.target.closest('.lname');
+  if (inp) flushLabel(Number(inp.closest('.card.line').dataset.line), inp.value);
 });
 $('lineCards').addEventListener('keydown', e => {
   const inp = e.target.closest('.lname');
   if (inp && e.key === 'Enter') inp.blur();
 });
+
+function flushLabel(lineId, value){
+  clearTimeout(state.labelTimers[lineId]);
+  delete state.labelTimers[lineId];
+  const draft = (value || '').trim();
+  const line = state.lines.find(l => l.id === lineId);
+  if (line && (line.label || '') === draft){ delete state.labelDrafts[lineId]; return; }
+  state.labelDrafts[lineId] = draft;
+  post('/api/lines/label', { lineId, label: value }).then(r => {
+    if (!r || !r.error) return;
+    delete state.labelDrafts[lineId];
+    alert(r.error);
+  }).catch(() => { delete state.labelDrafts[lineId]; });
+}
 $('lineCards').addEventListener('change', async e => {
   const sel = e.target.closest('.ldev');
   if (!sel) return;
@@ -779,7 +809,6 @@ function setState(s){
   renderApps();
   paintPicker();
   paint($('micBar'), s.micLevel, $('micHold'), s.micHold);
-  $('micName').textContent = s.micName || '';
 
   if (s.micId && document.activeElement !== $('micDevice')) $('micDevice').value = s.micId;
   if (document.activeElement !== $('micGain')){
