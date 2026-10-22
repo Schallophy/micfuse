@@ -603,7 +603,7 @@ function lineCardHtml(l){
     <div class="meter" style="margin-top:10px"><div class="fill line"></div><span class="hold"></span></div>
     <div class="pool" data-line="${l.id}">${chips + waiting || '<span class="pempty">未接入音频源</span>'}</div>
     ${l.error ? `<div class="banner err lerr">${escapeHtml(l.error)}</div>` : ''}
-    <div class="lstat"></div>`;
+    <div class="lstat" title="输出缓冲：设备端当前排队等待播放的音频，越短延迟越低。&#10;设备周期：设备固有的处理间隔，由驱动决定，越小延迟下限越低。&#10;欠帧：缓冲不足、被迫补静音的次数。&#10;削顶：音量超过满幅、被截断的样本数。"></div>`;
 }
 
 function lineSigOf(){
@@ -636,8 +636,8 @@ function renderLines(){
 
 function lineStat(l){
   const apps = (l.sourceIds || []).filter(id => id !== 0).length;
-  return `${apps} 个源 · 队列 ${l.queueMs.toFixed(1)} ms · ` +
-         `授权 ${(l.renderLatencyMs || 0).toFixed(1)} ms · 欠帧 ${l.starvedFrames || 0} · 削顶 ${l.clippedSamples || 0}` +
+  return `${apps} 个源 · 输出缓冲 ${l.queueMs.toFixed(1)} ms · ` +
+         `设备周期 ${(l.renderLatencyMs || 0).toFixed(1)} ms · 欠帧 ${l.starvedFrames || 0} · 削顶 ${l.clippedSamples || 0}` +
          (l.mixBackstops ? ` · 兜底 ${l.mixBackstops}` : '');
 }
 
@@ -855,6 +855,9 @@ document.addEventListener('visibilitychange', () => {
     return;
   }
   startUiLoops();
+  // A hidden tab's timers are throttled by the browser, so ask for the build id right away: this is
+  // the moment the user can see the page again.
+  ping();
   refreshState();
 });
 
