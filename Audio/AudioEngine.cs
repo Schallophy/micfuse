@@ -863,8 +863,8 @@ public sealed class AudioEngine : IAsyncDisposable
                 {
                     _micLines.Add(lineId);
                     line.Bus.AttachSource(_mic.Ring, MicFeedId, _micGain);
-                    // A mic that was only selected, never opened, starts capturing as soon as it has
-                    // somewhere to send.
+                    // Normally the recorder is already running from the selection itself; this covers
+                    // a mic that was selected while its capture could not open.
                     if (_micDevice is not null) await OpenMicRecorderLocked(log: true);
                 }
                 else line.Bus.SetGain(MicFeedId, _micGain);
@@ -1107,16 +1107,16 @@ public sealed class AudioEngine : IAsyncDisposable
         finally { _ops.Release(); }
     }
 
-    /// <summary>Restoring a saved microphone must not grab the hardware: the selection comes back, but
-    /// capture only opens once the mic has a line to send to.</summary>
+    /// <summary>A restored microphone opens its capture straight away, like any added source: the
+    /// selection means "capture this", whether or not a line is carrying it yet.</summary>
     public async Task RestoreMic(string deviceId, float gain)
     {
         await _ops.WaitAsync();
-        try { await SetMicLocked(deviceId, gain, log: true, onlyIfRouted: true); }
+        try { await SetMicLocked(deviceId, gain, log: true); }
         finally { _ops.Release(); }
     }
 
-    private async Task SetMicLocked(string deviceId, float gain, bool log, bool onlyIfRouted = false)
+    private async Task SetMicLocked(string deviceId, float gain, bool log)
     {
         _micGain = Math.Clamp(gain, 0f, 4f);
         foreach (int lineId in _micLines) FindLine(lineId)?.Bus?.SetGain(MicFeedId, _micGain);
@@ -1144,11 +1144,6 @@ public sealed class AudioEngine : IAsyncDisposable
                      ?? throw new InvalidOperationException("麦克风未找到: " + deviceId);
         _micName = _micDevice.FriendlyName;
         _micId = _micDevice.ID;
-        if (onlyIfRouted && _micLines.Count == 0)
-        {
-            if (log) Log($"mic selected: '{_micName}'，无线路，暂不采集");
-            return;
-        }
         await OpenMicRecorderLocked(log);
     }
 
@@ -1163,10 +1158,16 @@ public sealed class AudioEngine : IAsyncDisposable
             .Build();
         var ring = _mic.Ring;
         var meter = _micMeter;
+        bool sawData = false;
         _micRecorder.DataAvailable += (buffer, _, _, _) =>
         {
             var f = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, float>(buffer);
             ring.Write(f);
+            if (!sawData)
+            {
+                sawData = true;
+                Log($"mic data flowing: {f.Length} frames/packet");
+            }
             if (f.Length > 0)
             {
                 float peak = 0f;
