@@ -331,7 +331,6 @@ async function toggleRoute(sourceId, lineId, on){
 async function removeSource(id){
   const s = findSource(id);
   if (!s || state.busy) return;
-  if (!confirm('移除“' + sourceLabel(s) + '”？')) return;
   state.busy = true;
   document.body.classList.add('busy');
   try {
