@@ -23,6 +23,8 @@ internal sealed class SystemTray : IDisposable
     private readonly IntPtr _iconHandle;
     private bool _active;
     private bool _restarting;
+    private bool? _darkTheme;
+    private volatile bool _themeDirty;
 
     public ApplicationContext Context => _context;
 
@@ -37,10 +39,20 @@ internal sealed class SystemTray : IDisposable
         _openItem = new ToolStripMenuItem("打开 MicFuse", null, (_, _) => _web.OpenPage());
         _restartItem = new ToolStripMenuItem("重启引擎", null, async (_, _) => await RestartAsync());
         _exitItem = new ToolStripMenuItem("退出", null, (_, _) => _context.ExitThread());
-        _menu = new ContextMenuStrip();
+        _menu = new ContextMenuStrip
+        {
+            // The default menu reserves a light image gutter and a check gutter; neither is used here.
+            ShowImageMargin = false,
+            ShowCheckMargin = false,
+            Padding = new Padding(4),
+        };
+        foreach (var item in new[] { _openItem, _restartItem, _exitItem })
+            item.Padding = new Padding(6, 3, 6, 3);
         _menu.Items.Add(_openItem);
         _menu.Items.Add(_restartItem);
         _menu.Items.Add(_exitItem);
+        SyncMenuTheme();
+        Microsoft.Win32.SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
 
         _icon = new NotifyIcon
         {
@@ -80,6 +92,12 @@ internal sealed class SystemTray : IDisposable
 
     private void Tick()
     {
+        if (_themeDirty)
+        {
+            _themeDirty = false;
+            SyncMenuTheme();
+        }
+
         bool active;
         try
         {
@@ -105,6 +123,88 @@ internal sealed class SystemTray : IDisposable
 
     private static string BuildTooltip(bool active, string url) =>
         active ? $"MicFuse — 混音运行中\n{url}" : $"MicFuse — 已停止\n{url}";
+
+    /// <summary>Raised on a SystemEvents thread; the tick applies it on the UI thread.</summary>
+    private void OnUserPreferenceChanged(object? sender, Microsoft.Win32.UserPreferenceChangedEventArgs e)
+    {
+        if (e.Category is Microsoft.Win32.UserPreferenceCategory.General
+            or Microsoft.Win32.UserPreferenceCategory.VisualStyle)
+            _themeDirty = true;
+    }
+
+    /// <summary>Follows the Windows app theme; the palette mirrors the web UI's light/dark surfaces.</summary>
+    private void SyncMenuTheme()
+    {
+        bool dark = IsDarkTheme();
+        if (dark == _darkTheme) return;
+        _darkTheme = dark;
+        var palette = dark ? MenuPalette.Dark : MenuPalette.Light;
+        _menu.BackColor = palette.Background;
+        _menu.ForeColor = palette.Foreground;
+        _menu.Renderer = new ToolStripProfessionalRenderer(new MenuColorTable(palette)) { RoundedEdges = false };
+        foreach (ToolStripItem item in _menu.Items) item.ForeColor = palette.Foreground;
+    }
+
+    private static bool IsDarkTheme()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+            return key?.GetValue("AppsUseLightTheme") is int light && light == 0;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    private sealed class MenuPalette
+    {
+        public static readonly MenuPalette Dark = new()
+        {
+            Background = Color.FromArgb(36, 35, 32),
+            Foreground = Color.FromArgb(243, 239, 230),
+            Hover = Color.FromArgb(46, 44, 41),
+            Border = Color.FromArgb(58, 55, 51),
+        };
+
+        public static readonly MenuPalette Light = new()
+        {
+            Background = Color.FromArgb(255, 255, 255),
+            Foreground = Color.FromArgb(31, 30, 29),
+            Hover = Color.FromArgb(246, 243, 236),
+            Border = Color.FromArgb(232, 228, 219),
+        };
+
+        public Color Background { get; init; }
+        public Color Foreground { get; init; }
+        public Color Hover { get; init; }
+        public Color Border { get; init; }
+    }
+
+    private sealed class MenuColorTable : ProfessionalColorTable
+    {
+        private readonly MenuPalette _palette;
+
+        public MenuColorTable(MenuPalette palette) => _palette = palette;
+
+        public override Color ToolStripDropDownBackground => _palette.Background;
+        public override Color ImageMarginGradientBegin => _palette.Background;
+        public override Color ImageMarginGradientMiddle => _palette.Background;
+        public override Color ImageMarginGradientEnd => _palette.Background;
+        public override Color MenuBorder => _palette.Border;
+        public override Color ToolStripBorder => _palette.Border;
+        public override Color MenuItemSelected => _palette.Hover;
+        public override Color MenuItemSelectedGradientBegin => _palette.Hover;
+        public override Color MenuItemSelectedGradientEnd => _palette.Hover;
+        public override Color MenuItemBorder => _palette.Hover;
+        public override Color MenuItemPressedGradientBegin => _palette.Hover;
+        public override Color MenuItemPressedGradientMiddle => _palette.Hover;
+        public override Color MenuItemPressedGradientEnd => _palette.Hover;
+        public override Color SeparatorDark => _palette.Border;
+        public override Color SeparatorLight => _palette.Background;
+    }
 
     private static Icon CreateIcon(out IntPtr handle)
     {
@@ -136,6 +236,7 @@ internal sealed class SystemTray : IDisposable
 
     public void Dispose()
     {
+        Microsoft.Win32.SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
         _timer.Dispose();
         _icon.Visible = false;
         _icon.Dispose();
