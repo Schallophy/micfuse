@@ -190,6 +190,8 @@ public sealed class AudioEngine : IAsyncDisposable
     private MMDevice? _micDevice;
     private MMDeviceCollection? _micDevices;
     private WasapiRecorder? _micRecorder;
+    private volatile bool _micLost;
+    private volatile int _micGeneration;
     private string _micName = "";
     private string _micId = "";
     private float _micGain = 1f;
@@ -1130,6 +1132,7 @@ public sealed class AudioEngine : IAsyncDisposable
         }
 
         await CloseMicRecorderLocked();
+        _micLost = false;
         _micName = "";
         _micId = "";
         if (string.IsNullOrWhiteSpace(deviceId))
@@ -1158,6 +1161,7 @@ public sealed class AudioEngine : IAsyncDisposable
             .Build();
         var ring = _mic.Ring;
         var meter = _micMeter;
+        int generation = ++_micGeneration;
         bool sawData = false;
         _micRecorder.DataAvailable += (buffer, _, _, _) =>
         {
@@ -1177,22 +1181,76 @@ public sealed class AudioEngine : IAsyncDisposable
         };
         _micRecorder.RecordingStopped += (_, e) =>
         {
-            Log($"mic stopped: {(e.Exception is null ? "clean" : e.Exception.Message)}");
+            string reason = e.Exception is null ? "clean" : e.Exception.Message;
+            Log($"mic stopped: {reason}");
+            // Closing on purpose retires the generation first; a stop from the live generation means
+            // the device went away under the capture, so the monitor keeps the selection and reopens it.
+            if (generation != _micGeneration) return;
+            _micLost = true;
+            Log($"mic waiting: '{_micName}' is gone; will capture again when it is back");
         };
         _micRecorder.StartRecording();
         if (log) Log($"mic capture on: '{_micName}' gain={_micGain:F2}");
+        EnsureMonitor();
     }
 
     private async Task CloseMicRecorderLocked()
     {
-        if (_micRecorder is null) return;
-        try { _micRecorder.StopRecording(); } catch { }
-        await DisposeRecorder(_micRecorder);
-        _micRecorder = null;
+        if (_micRecorder is not null)
+        {
+            _micGeneration++;
+            try { _micRecorder.StopRecording(); } catch { }
+            await DisposeRecorder(_micRecorder);
+            _micRecorder = null;
+        }
         _micDevice?.Dispose();
         _micDevice = null;
         _micDevices?.Dispose();
         _micDevices = null;
+    }
+
+    /// <summary>A USB or wireless microphone can vanish without the user changing the selection. Keep
+    /// its identity, look for it again by id (friendly name as fallback), and reopen capture once it is
+    /// enumerated again; the buses still hold the mic ring, so nothing else has to be rewired.</summary>
+    private async Task ReopenMicIfLost()
+    {
+        if (!_micLost) return;
+        await _ops.WaitAsync();
+        try
+        {
+            if (!_micLost) return;
+            string wantedId = _micId;
+            string wantedName = _micName;
+            if (wantedId.Length == 0 && wantedName.Length == 0)
+            {
+                _micLost = false;
+                return;
+            }
+            await CloseMicRecorderLocked();
+            using var enumerator = new MMDeviceEnumerator();
+            _micDevices = enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active);
+            var device = FindDevice(_micDevices, wantedId) ?? FindDevice(_micDevices, wantedName);
+            if (device is null)
+            {
+                _micDevices.Dispose();
+                _micDevices = null;
+                return;   // still gone; the monitor looks again in two seconds
+            }
+            _micDevice = device;
+            _micName = device.FriendlyName;
+            _micId = device.ID;
+            await OpenMicRecorderLocked(log: false);
+            _micLost = false;
+            Log($"mic reconnected: '{_micName}'");
+        }
+        catch (Exception ex)
+        {
+            Log("mic reconnect failed: " + ex.Message);
+        }
+        finally
+        {
+            _ops.Release();
+        }
     }
 
     private bool MicMatchesCurrent(string selector)
@@ -1250,7 +1308,11 @@ public sealed class AudioEngine : IAsyncDisposable
                 }
                 // Two seconds is fast enough to feel instant when an app starts, and the scan is free
                 // unless a source is actually waiting for its process.
-                if (++tick % 4 == 0) await ReconnectSources();
+                if (++tick % 4 == 0)
+                {
+                    await ReconnectSources();
+                    await ReopenMicIfLost();
+                }
                 if (PreviewExpired()) await StopPreviews();
             }
             catch (Exception ex)
